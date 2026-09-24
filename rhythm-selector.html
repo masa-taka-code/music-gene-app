@@ -591,7 +591,7 @@
             <button class="btn" id="lcAi" title="漢字の読みを自動で入れ、歌詞に合う雰囲気・ジャンル・テンポを提案します（APIキーが必要）">✨ AIで読み・曲調を提案</button>
             <span class="muted small" id="lcStatus"></span>
           </div>
-          <p class="muted small">漢字を含む行は「よみ」を入れると、1音ずつ正確に音符へ割り当てます（空のときは漢字1文字を1音として扱います）。助詞の「は」「へ」は、歌う音どおり「わ」「え」と書くのがおすすめです。</p>
+          <p class="muted small">漢字を含む行は「よみ」を入れると、1音ずつ正確に音符へ割り当てます（空のときは漢字1文字を1音として扱います）。歌詞欄に「いつもの駅のホームで｜いつもの えきの ほーむで」のように「｜」で区切って書くと、よみも一緒に読み込みます。助詞の「は」「へ」は、歌う音どおり「わ」「え」と書くのがおすすめです。</p>
           <div class="lyrics-editor" id="lcParsed"></div>
         </div>
 
@@ -4603,6 +4603,11 @@ function persistLyricComp(){
   clearTimeout(lcTimer);
   lcTimer = setTimeout(() => saveJSON(KEYS.lyricComp, state.lyricComp), 300);
 }
+// 「歌詞｜よみ」の形で書かれた行は、よみも一緒に取り込む
+function splitInlineReading(raw){
+  const parts = String(raw).split(/\s*[|｜]\s*/);
+  return parts.length >= 2 && parts[0].trim() ? [parts[0].trim(), parts.slice(1).join(" ").trim()] : [String(raw).trim(), ""];
+}
 function lyricStruct(){
   const lc = lyricComp();
   const blocks = parseLyricsText(lc.text);
@@ -4611,7 +4616,10 @@ function lyricStruct(){
     sections: blocks.map((b, i) => ({
       type: useTypes && LYRIC_SECTION_TYPES.includes(lc.types[i]) ? lc.types[i] : b.type,
       label: b.label,
-      lines: b.lines.map(t => ({ text: t, reading: lc.readings[t] || "" }))
+      lines: b.lines.map(raw => {
+        const [text, inline] = splitInlineReading(raw);
+        return { text, reading: lc.readings[text] || inline || "" };
+      })
     }))
   };
 }
@@ -4787,7 +4795,7 @@ async function runLyricAi(){
       if (!sec) return;
       sec.lines.forEach((l, j) => {
         const r = String((s.readings || [])[j] || "").trim();
-        if (r && !lc.readings[l.text]) lc.readings[l.text] = r;
+        if (r && !l.reading) lc.readings[l.text] = r;
       });
       if (LYRIC_SECTION_TYPES.includes(s.type)) sec.type = s.type;
     });
