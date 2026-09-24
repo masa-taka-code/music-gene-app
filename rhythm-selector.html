@@ -152,7 +152,7 @@
   .now-title{font-size:20px;font-weight:600;margin:2px 0 0;letter-spacing:-.01em;word-break:break-word;}
   .now-sub{color:var(--text-2);margin-top:2px;}
   .chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px;}
-  .chip{font-size:11.5px;padding:2px 8px;border-radius:999px;background:var(--panel-2);border:0.5px solid var(--sep);color:var(--text-2);white-space:nowrap;}
+  .chip{font-size:11.5px;padding:2px 8px;border-radius:999px;background:var(--panel-2);border:0.5px solid var(--sep);color:var(--text-2);max-width:100%;overflow-wrap:anywhere;}
   .chip b{color:var(--text);font-weight:500;}
   .progression{margin-top:12px;display:flex;flex-wrap:wrap;gap:6px 14px;align-items:baseline;}
   .progression .roman{font-family:var(--mono);color:var(--text-2);font-size:12px;}
@@ -264,6 +264,23 @@
   .toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
   .banner{background:var(--red);color:#fff;padding:6px 14px;font-size:12px;text-align:center;}
 
+  /* ---------- Techniques / Lyrics ---------- */
+  .check-row{display:flex;flex-wrap:wrap;gap:6px 16px;}
+  .check-row label{display:flex;align-items:center;gap:5px;cursor:pointer;font-size:12.5px;user-select:none;}
+  .lyrics-view{margin-top:12px;padding:12px 14px;border-radius:10px;background:var(--panel-2);border:0.5px solid var(--sep);}
+  .lv-section{font-size:11px;color:var(--accent);font-weight:600;letter-spacing:.04em;}
+  .lv-line{font-size:19px;font-weight:600;margin-top:2px;line-height:1.5;word-break:break-word;}
+  .lv-reading{font-size:12.5px;margin-top:2px;word-break:break-word;}
+  .lv-reading span{color:var(--text-3);transition:color 60ms;}
+  .lv-reading span + span{margin-left:1px;}
+  .lv-reading span.sung{color:var(--accent);}
+  .lv-next{font-size:12.5px;color:var(--text-2);margin-top:6px;}
+  .lyrics-editor{display:flex;flex-direction:column;gap:14px;margin-top:12px;}
+  .ly-section h4{margin:0 0 4px;font-size:12px;color:var(--text-2);font-weight:600;}
+  .ly-line{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr) 78px;gap:6px;align-items:center;margin-top:4px;}
+  .ly-count{font-family:var(--mono);font-size:10.5px;color:var(--text-2);text-align:right;white-space:nowrap;}
+  .ly-count.warn{color:var(--orange);}
+
   /* ---------- Responsive ---------- */
   @media (max-width: 1180px){
     body{overflow:auto;}
@@ -283,6 +300,8 @@
     .sidebar{position:static;max-height:none;order:3;border-right:0;border-top:1px solid var(--sep);}
     .main{padding:14px 16px 32px;}
     .lcd-cell{min-width:48px;padding:1px 6px;}
+    .ly-line{grid-template-columns:1fr;}
+    .ly-count{text-align:left;}
   }
 </style>
 </head>
@@ -315,7 +334,9 @@
           <div class="menu-label" id="exportTargetLabel">表示中の素材</div>
           <button class="menu-item" data-export="wav"><span>WAV（ミックス）</span><span class="muted">⌘E</span></button>
           <button class="menu-item" data-export="stems"><span>ステム（パート別WAV・ZIP）</span></button>
-          <button class="menu-item" data-export="midi"><span>MIDI（マルチトラック）</span></button>
+          <button class="menu-item" data-export="midi"><span>MIDI（マルチトラック・歌詞付き）</span></button>
+          <button class="menu-item" data-export="musicxml"><span>MusicXML（メロディ＋歌詞）</span><span class="muted">歌声合成用</span></button>
+          <button class="menu-item" data-export="lyrics"><span>歌詞テキスト</span></button>
           <button class="menu-item" data-export="json"><span>JSON（データ）</span></button>
           <div class="menu-sep"></div>
           <button class="menu-item" data-export="package"><span>販売用パッケージ（ZIP）</span><span class="muted">WAV+ステム+MIDI+説明</span></button>
@@ -372,6 +393,14 @@
             <label for="genKey">キー</label>
             <select id="genKey"></select>
           </div>
+          <div class="field">
+            <label for="genMood">雰囲気・曲調</label>
+            <select id="genMood"></select>
+          </div>
+          <div class="field">
+            <label for="genTempo">テンポ</label>
+            <select id="genTempo"></select>
+          </div>
           <div class="field" style="grid-column:span 2;min-width:0">
             <span class="field-label">長さ</span>
             <div class="field-row">
@@ -396,6 +425,10 @@
               <label class="toggle-row" title="評価のあと次の候補を自動で再生"><input type="checkbox" class="switch" id="genAutoPlay"> 自動再生</label>
             </div>
           </div>
+          <div class="field" style="grid-column:1 / -1">
+            <span class="field-label">コードの技法（チェックした技法を、合う場所で確率的に使います）</span>
+            <div class="check-row" id="genTechniques"></div>
+          </div>
         </div>
       </section>
 
@@ -413,6 +446,7 @@
         <div class="chips" id="nowChips"></div>
         <div class="progression" id="nowProg"></div>
         <div class="canvas-wrap"><canvas id="patternCanvas" aria-label="パターン表示"></canvas></div>
+        <div class="lyrics-view" id="lyricsView" aria-live="off" hidden></div>
         <div class="edit-row" id="editRow">
           <div class="field-row"><span class="field-label">BPM</span><input type="number" id="editBpm" min="40" max="220" step="1"></div>
           <div class="field-row"><span class="field-label">スウィング</span><input type="range" id="editSwing" min="0" max="0.5" step="0.01"><span class="muted small" id="editSwingVal">0%</span></div>
@@ -452,7 +486,7 @@
           </div>
           <div class="table-wrap">
             <table class="sections">
-              <thead><tr><th>#</th><th>セクション</th><th>小節</th><th>使うループ</th><th>ドラム</th><th>ベース</th><th>コード</th><th>メロディ</th><th></th></tr></thead>
+              <thead><tr><th>#</th><th>セクション</th><th>小節</th><th>転調</th><th>使うループ</th><th>ドラム</th><th>ベース</th><th>コード</th><th>メロディ</th><th></th></tr></thead>
               <tbody id="songRows"></tbody>
             </table>
           </div>
@@ -463,12 +497,50 @@
             </div>
             <span class="muted" id="songSummary"></span>
           </div>
+          <div class="form-grid" style="margin-top:14px">
+            <div class="field"><label for="songModPreset">転調</label>
+              <div class="field-row"><select id="songModPreset" style="flex:1"></select><button class="btn small" id="songApplyMod">適用</button></div>
+            </div>
+            <div class="field"><label for="songVocal">メロディの音域</label>
+              <select id="songVocal">
+                <option value="instrument">楽器メロディ（そのまま）</option>
+                <option value="female">女性ボーカル向け</option>
+                <option value="male">男性ボーカル向け</option>
+              </select>
+            </div>
+            <div class="field"><span class="field-label">展開の技法</span>
+              <div class="check-row" style="min-height:26px;align-items:center">
+                <label title="サビ直前の1拍を全パート無音にして、サビの入りを際立たせます"><input type="checkbox" id="songBreak"> サビ前ブレイク</label>
+                <label title="Bメロのドラムを半分のノリにして、サビとの落差を作ります"><input type="checkbox" id="songHalfTime"> Bメロをハーフテンポ</label>
+              </div>
+            </div>
+          </div>
           <div class="field-row" style="margin-top:12px">
             <button class="btn primary" id="songPlay">▶ ソングを再生・表示</button>
             <button class="btn" id="songSave">ソングを保存</button>
             <button class="btn" id="songNew">新規</button>
           </div>
           <p class="muted small" id="songHint"></p>
+
+          <div class="hr"></div>
+          <div class="panel-head" style="margin-bottom:6px"><h2>歌詞</h2><span class="muted small" id="lyricsStatus"></span></div>
+          <div class="form-grid">
+            <div class="field"><label for="lyTheme">テーマ</label><input type="text" id="lyTheme" placeholder="例：夏の終わりの帰り道、言えなかった気持ち"></div>
+            <div class="field"><label for="lyKeywords">入れたい言葉（任意）</label><input type="text" id="lyKeywords" placeholder="例：花火、自転車、また明日"></div>
+            <div class="field"><label for="lyLang">言語</label>
+              <select id="lyLang">
+                <option value="ja">日本語</option>
+                <option value="ja-en">日本語（サビに英語フレーズ）</option>
+                <option value="en">英語</option>
+              </select>
+            </div>
+          </div>
+          <div class="field-row" style="margin-top:10px">
+            <button class="btn primary" id="lyGenerate">✨ AIで作詞</button>
+            <button class="btn" id="lyClear">歌詞をクリア</button>
+          </div>
+          <p class="muted small">「よみ」の1音（ひらがな1文字。小さい「ゃ」などは前の文字とセット、英語は1音節）をメロディの1音に割り当て、音符の数を自動で調整します。よみが空のときは歌詞の文字をそのまま使います。書き出しメニューの「MusicXML」「MIDI」は歌詞付きで出力されるので、歌声合成ソフトに読み込んで歌わせられます。</p>
+          <div class="lyrics-editor" id="lyricsEditor"></div>
         </div>
 
         <div class="tab-body" data-toolbody="auto" hidden>
@@ -694,6 +766,39 @@ const DEFAULT_RULES = {
       chordStyles: ["arp8", "sustain"], bassStyles: ["sustain", "follow"],
       instruments: { chord: ["piano", "strings", "guitar-nylon", "epiano"], bass: ["bass-finger", "bass-acoustic"], melody: ["piano", "strings", "flute", "musicbox"] },
       melody: [0.3, 0.55] }
+  ],
+  // 雰囲気：ジャンルの候補の中から、ここに挙げたものを選びやすくする（modes は長調/短調の出やすさの倍率）
+  moods: [
+    { name: "bright", label: "明るい・ハッピー", modes: { major: 4, minor: 0.5 }, bpm: [108, 150], genres: ["pop", "citypop", "edm"],
+      progressions: ["axis", "doowop", "I-V", "I-IV", "komuro", "oudou"], densities: ["mid", "high", "four"], chordStyles: ["pulse8", "strum", "offbeat"],
+      instruments: { chord: ["piano", "guitar-steel", "brass", "synth-stab"], melody: ["synth-lead", "brass", "flute"] }, sevenths: 0.1, melody: 1.1, techniques: { secdom: 0.3, sus4: 0.35 } },
+    { name: "sad", label: "切ない・泣ける", modes: { major: 2, minor: 2 }, bpm: [64, 104], genres: ["ballad", "pop", "lofi"],
+      progressions: ["oudou", "komuro", "canon", "vi-IV", "minor-iv", "andalusian", "I-vi"], densities: ["ballad", "low", "lofi"], chordStyles: ["arp8", "sustain"],
+      instruments: { chord: ["piano", "strings", "guitar-nylon"], melody: ["piano", "strings", "flute", "voice-oohs"] }, sevenths: 0.4, melody: 0.85, techniques: { borrowed: 0.55, onchord: 0.5, secdom: 0.4 } },
+    { name: "cool", label: "クール・スタイリッシュ", modes: { major: 1, minor: 3 }, bpm: [96, 128], genres: ["citypop", "edm", "lofi", "trap"],
+      progressions: ["minor-down", "minor-epic", "ii-V", "251", "marusa"], densities: ["mid", "four", "lofi"], chordStyles: ["offbeat", "syncop", "sustain"],
+      instruments: { chord: ["epiano", "synth-stab", "guitar-muted"], bass: ["bass-slap", "bass-synth", "synth-bass"], melody: ["lead-saw", "sax", "synth-pluck"] }, sevenths: 0.7, techniques: { tension: 0.5 } },
+    { name: "nostalgic", label: "エモい・ノスタルジック", modes: { major: 3, minor: 1 }, bpm: [78, 118], genres: ["citypop", "lofi", "pop"],
+      progressions: ["marusa", "oudou", "canon", "251", "IV-V"], densities: ["lofi", "mid", "low"], chordStyles: ["syncop", "arp8", "sustain"],
+      instruments: { chord: ["epiano", "guitar-clean", "piano"], melody: ["vibes", "epiano", "flute", "musicbox"] }, sevenths: 0.8, techniques: { secdom: 0.5, onchord: 0.45, tension: 0.4 } },
+    { name: "fresh", label: "爽やか", modes: { major: 5, minor: 0.5 }, bpm: [110, 142], genres: ["pop", "rock"],
+      progressions: ["axis", "I-V", "I-IV", "oudou", "doowop"], densities: ["mid", "rock"], chordStyles: ["strum", "pulse8", "arp8"],
+      instruments: { chord: ["guitar-steel", "guitar-clean", "piano"], melody: ["flute", "synth-lead", "guitar-clean"] }, sevenths: 0.2, techniques: { sus4: 0.5, onchord: 0.35 } },
+    { name: "dark", label: "ダーク・緊張感", modes: { major: 0.2, minor: 6 }, bpm: [70, 150], genres: ["trap", "rock", "edm"],
+      progressions: ["minor-iv", "andalusian", "minor-down", "minor-epic"], densities: ["trap", "rock", "mid"], chordStyles: ["sustain", "arp16", "pulse8"],
+      instruments: { chord: ["strings", "pad-warm", "organ", "guitar-dist"], melody: ["musicbox", "lead-saw", "strings", "choir-aahs"] }, sevenths: 0.2 },
+    { name: "epic", label: "壮大・ドラマチック", modes: { major: 2, minor: 2 }, bpm: [76, 140], genres: ["ballad", "rock", "edm"],
+      progressions: ["minor-epic", "canon", "oudou", "komuro"], densities: ["rock", "high", "ballad"], chordStyles: ["sustain", "pulse8", "arp16"],
+      instruments: { chord: ["strings", "brass", "piano", "pad-warm", "choir-aahs"], melody: ["strings", "brass", "choir-aahs"] }, techniques: { sus4: 0.45, borrowed: 0.4 } },
+    { name: "chill", label: "チル・リラックス", modes: { major: 3, minor: 2 }, bpm: [68, 100], genres: ["lofi", "citypop"],
+      progressions: ["251", "marusa", "I-vi", "ii-V", "IV-V"], densities: ["lofi", "low"], chordStyles: ["sustain", "syncop"],
+      instruments: { chord: ["epiano", "guitar-nylon", "pad-warm"], melody: ["vibes", "flute", "epiano"] }, sevenths: 0.9, melody: 0.75, techniques: { tension: 0.6 } },
+    { name: "energetic", label: "元気・アップテンポ", modes: { major: 3, minor: 1 }, bpm: [128, 160], genres: ["rock", "edm", "pop"],
+      progressions: ["I-V", "IV-V", "axis", "vi-IV", "minor-down"], densities: ["high", "rock", "four"], chordStyles: ["pulse8", "strum", "offbeat"],
+      instruments: { chord: ["guitar-dist", "synth-stab", "piano"], melody: ["synth-lead", "lead-saw", "guitar-dist"] }, melody: 1.2 },
+    { name: "cute", label: "かわいい・ポップ", modes: { major: 6, minor: 0.3 }, bpm: [112, 145], genres: ["pop", "edm"],
+      progressions: ["doowop", "axis", "I-IV", "komuro"], densities: ["mid", "four"], chordStyles: ["offbeat", "arp8", "pulse8"],
+      instruments: { chord: ["musicbox", "vibes", "piano", "synth-pluck"], melody: ["musicbox", "synth-pluck", "flute", "vibes"] }, melody: 1.1, techniques: { secdom: 0.3 } }
   ]
 };
 
@@ -723,6 +828,8 @@ const INSTRUMENTS = {
   "musicbox":      { label: "オルゴール",             kind: "sample", gm: "music_box",            program: 10, oct: [4, 7], release: 1.5 },
   "pad-warm":      { label: "ウォームパッド",         kind: "sample", gm: "pad_2_warm",           program: 89, oct: [2, 6], release: 1.5 },
   "lead-saw":      { label: "ソウリード",             kind: "sample", gm: "lead_2_sawtooth",      program: 81, oct: [3, 6], release: 0.3 },
+  "voice-oohs":    { label: "ボイス（ウー）",         kind: "sample", gm: "voice_oohs",           program: 53, oct: [2, 6], release: 0.6 },
+  "choir-aahs":    { label: "コーラス（アー）",       kind: "sample", gm: "choir_aahs",           program: 52, oct: [2, 6], release: 1.0 },
   "synth-pad":     { label: "シンセパッド（内蔵）",   kind: "synth", preset: "pad",   program: 88 },
   "synth-stab":    { label: "シンセスタブ（内蔵）",   kind: "synth", preset: "stab",  program: 81 },
   "synth-pluck":   { label: "プラック（内蔵）",       kind: "synth", preset: "pluck", program: 45 },
@@ -730,9 +837,9 @@ const INSTRUMENTS = {
   "synth-lead":    { label: "シンセリード（内蔵）",   kind: "synth", preset: "lead",  program: 80 }
 };
 const ROLE_INSTRUMENTS = {
-  chord:  ["piano", "epiano", "organ", "guitar-nylon", "guitar-steel", "guitar-clean", "guitar-muted", "guitar-dist", "strings", "brass", "pad-warm", "vibes", "musicbox", "synth-pad", "synth-stab", "synth-pluck"],
+  chord:  ["piano", "epiano", "organ", "guitar-nylon", "guitar-steel", "guitar-clean", "guitar-muted", "guitar-dist", "strings", "brass", "pad-warm", "choir-aahs", "vibes", "musicbox", "synth-pad", "synth-stab", "synth-pluck"],
   bass:   ["bass-finger", "bass-pick", "bass-slap", "bass-acoustic", "bass-synth", "synth-bass"],
-  melody: ["synth-lead", "synth-pluck", "lead-saw", "piano", "epiano", "flute", "sax", "brass", "strings", "vibes", "musicbox", "guitar-nylon", "guitar-clean", "guitar-dist", "organ"]
+  melody: ["synth-lead", "synth-pluck", "lead-saw", "voice-oohs", "choir-aahs", "piano", "epiano", "flute", "sax", "brass", "strings", "vibes", "musicbox", "guitar-nylon", "guitar-clean", "guitar-dist", "organ"]
 };
 const ROLE_FALLBACK_PRESET = { chord: "pad", bass: "bass", melody: "lead" };
 const MELODIC_ROLES = ["bass", "chord", "melody"];
@@ -754,7 +861,19 @@ const DRUM_PARTS = ["kick", "snare", "hihat", "tom"];
 const PART_LABELS = { kick: "キック", snare: "スネア", hihat: "ハイハット", tom: "タム", bass: "ベース", chord: "コード", melody: "メロディ" };
 const STEM_GROUPS = { drums: DRUM_PARTS, bass: ["bass"], chords: ["chord"], melody: ["melody"] };
 
+const TECHNIQUES = {
+  secdom:   { label: "セカンダリードミナント", base: 0.25, hint: "次のコードへ強く引っぱる V7 を小節の後半に挟みます" },
+  sus4:     { label: "sus4", base: 0.35, hint: "ドミナントを sus4 で溜めてから解決させます" },
+  borrowed: { label: "借用和音（サブドミナントマイナー）", base: 0.3, hint: "IV を途中でマイナーにして切なさを出します" },
+  tension:  { label: "テンション（9th）", base: 0.2, hint: "9th を足して洗練された響きにします" },
+  onchord:  { label: "オンコード（ベースライン）", base: 0.3, hint: "ベースを 3度・5度にしてなめらかに動かします" }
+};
+const MOOD_BOOST = 4;
+const PHRASE_STEPS = 32; // 歌詞1行＝2小節
+const SF_TABLE = { 0: 0, 7: 1, 2: 2, 9: 3, 4: 4, 11: 5, 6: 6, 1: -5, 8: -4, 3: -3, 10: -2, 5: -1 };
+
 const FEATURE_LABELS = {
+  mood: "雰囲気",
   genre: "ジャンル", bpmBand: "テンポ帯", key: "キー", progression: "コード進行", density: "リズム",
   chordStyle: "コード奏法", bassStyle: "ベース奏法", kit: "ドラムキット",
   inst_chord: "コード楽器", inst_bass: "ベース楽器", inst_melody: "メロディ楽器"
@@ -774,7 +893,8 @@ const KEYS = {
   mix: "rhythmTool_mix_v2",
   gen: "rhythmTool_gen_v1",
   songs: "rhythmTool_songs_v1",
-  settings: "rhythmTool_settings_v1"
+  settings: "rhythmTool_settings_v1",
+  draft: "rhythmTool_songDraft_v1"
 };
 const DEFAULT_MIX = {
   parts: {
@@ -788,7 +908,11 @@ const DEFAULT_MIX = {
   },
   fx: { reverbDecay: 2.4, reverb: 0.8, comp: 0.4, tone: 18000, masterDb: 0, humanize: 0.5 }
 };
-const DEFAULT_GEN = { genre: "auto", lengthMode: "bars", bars: 2, seconds: 8, key: "auto", melody: true, autoPlay: true, abMode: false, locks: { chord: null, bass: null, melody: null, kit: null } };
+const DEFAULT_GEN = {
+  genre: "auto", mood: "auto", tempo: "auto", lengthMode: "bars", bars: 2, seconds: 8, key: "auto", melody: true, autoPlay: true, abMode: false,
+  locks: { chord: null, bass: null, melody: null, kit: null },
+  techniques: { secdom: true, sus4: true, borrowed: true, tension: true, onchord: true }
+};
 const DEFAULT_SETTINGS = { theme: "auto", apiKey: "", sampleRate: 44100, bitDepth: 16, wavMode: "seamless", repeats: 2, tail: 2 };
 
 const clone = o => JSON.parse(JSON.stringify(o));
@@ -821,14 +945,24 @@ function loadMix(){
 function loadGen(){
   const g = Object.assign(clone(DEFAULT_GEN), loadJSON(KEYS.gen, {}));
   g.locks = Object.assign(clone(DEFAULT_GEN.locks), g.locks || {});
+  g.techniques = Object.assign(clone(DEFAULT_GEN.techniques), g.techniques || {});
   return g;
+}
+function normalizeSong(s){
+  if (!s || !Array.isArray(s.sections)) return null;
+  s.techniques = Object.assign({ breakBeforeChorus: false, halfTimePre: false }, s.techniques || {});
+  s.vocal = s.vocal || "instrument";
+  s.modulation = s.modulation || "none";
+  s.lyricsSettings = Object.assign({ theme: "", keywords: "", lang: "ja" }, s.lyricsSettings || {});
+  s.sections.forEach(x => { if (x.shift == null) x.shift = 0; });
+  return s;
 }
 
 const state = {
   rules: DEFAULT_RULES,
   weights: loadJSON(KEYS.weights, null) || {},
   savedLoops: (loadJSON(KEYS.saved, []) || []).map(normalizeLoop).filter(Boolean),
-  songs: loadJSON(KEYS.songs, []) || [],
+  songs: (loadJSON(KEYS.songs, []) || []).map(normalizeSong).filter(Boolean),
   mix: loadMix(),
   gen: loadGen(),
   settings: Object.assign(clone(DEFAULT_SETTINGS), loadJSON(KEYS.settings, {})),
@@ -867,7 +1001,8 @@ const SUFFIX_INTERVALS = {
 const QUALITY_NAMES = {
   "0,4,7": "", "0,3,7": "m", "0,3,6": "dim", "0,4,8": "aug", "0,4,7,11": "M7", "0,4,7,10": "7", "0,3,7,10": "m7",
   "0,3,6,10": "m7(b5)", "0,3,6,9": "dim7", "0,3,7,11": "mM7", "0,5,7": "sus4", "0,2,7": "sus2", "0,4,7,9": "6",
-  "0,3,7,9": "m6", "0,4,7,14": "add9", "0,4,7,10,14": "9"
+  "0,3,7,9": "m6", "0,4,7,14": "add9", "0,4,7,10,14": "9",
+  "0,3,7,14": "m(add9)", "0,4,7,11,14": "M9", "0,3,7,10,14": "m9", "0,5,7,10": "7sus4"
 };
 const mod12 = n => ((n % 12) + 12) % 12;
 const pcFromName = name => PC_BY_NAME[name] ?? 0;
@@ -905,7 +1040,8 @@ function buildChord(sym, keyPc, mode, sevenths){
   }
   return { rootPc, intervals, pcs: intervals.map(i => mod12(rootPc + i)) };
 }
-const chordName = (ch, flats) => pcName(ch.rootPc, flats) + (QUALITY_NAMES[ch.intervals.join(",")] ?? "");
+const chordName = (ch, flats) => pcName(ch.rootPc, flats) + (QUALITY_NAMES[ch.intervals.join(",")] ?? "")
+  + (ch.bassPc != null && ch.bassPc !== ch.rootPc ? "/" + pcName(ch.bassPc, flats) : "");
 
 /* =========================================================================
    5. 生成ロジック
@@ -934,6 +1070,10 @@ function weightedPick(items, weightMap, keyFn = x => x){
 }
 
 const genresOf = rules => (rules.genres && rules.genres.length ? rules.genres : DEFAULT_RULES.genres);
+const moodsOf = rules => (rules.moods && rules.moods.length ? rules.moods : DEFAULT_RULES.moods);
+const moodOf = name => moodsOf(state.rules).find(m => m.name === name) || DEFAULT_RULES.moods.find(m => m.name === name);
+const moodLabel = name => (moodOf(name) || {}).label || name || "—";
+const techniqueLabels = list => (list || []).map(t => (TECHNIQUES[t] || {}).label || t);
 const genreOf = name => genresOf(state.rules).find(g => g.name === name) || DEFAULT_RULES.genres.find(g => g.name === name);
 const genreLabel = name => (genreOf(name) || {}).label || (name === "legacy" ? "旧バージョン" : name || "—");
 const densityOf = name => state.rules.rhythmDensities.find(d => d.name === name) || DEFAULT_RULES.rhythmDensities.find(d => d.name === name);
@@ -954,6 +1094,7 @@ const loopDuration = l => l.bars * STEPS * (60 / l.bpm / 4);
 
 function featuresOf(loop){
   return {
+    mood: loop.mood,
     genre: loop.genre, bpmBand: loop.bpmBandName, key: loop.key + loop.mode, progression: loop.progressionName,
     density: loop.densityName, chordStyle: loop.chordStyle, bassStyle: loop.bassStyle, kit: loop.drumKit,
     inst_chord: loop.instruments?.chord, inst_bass: loop.instruments?.bass, inst_melody: loop.instruments?.melody
@@ -967,15 +1108,37 @@ function generateLoop({ fixed = null, bars: forcedBars = null } = {}){
   const pick = (items, feature, keyFn) => weightedPick(items, W[feature], keyFn);
   const f = fixed || {};
 
+  const moods = moodsOf(rules);
+  const mood = (f.mood && moods.find(m => m.name === f.mood))
+    || (gen.mood !== "auto" && moods.find(m => m.name === gen.mood))
+    || pick(moods, "mood", m => m.name);
+  // 雰囲気が推す候補は、学習した重みに倍率をかけて選ばれやすくする
+  const moodPick = (items, feature, favored, keyFn = x => x) => {
+    const base = W[feature] || {};
+    if (!favored || !favored.length) return weightedPick(items, base, keyFn);
+    const boosted = Object.assign({}, base);
+    favored.forEach(v => { boosted[v] = (base[v] ?? 1) * MOOD_BOOST; });
+    return weightedPick(items, boosted, keyFn);
+  };
+
   const genres = genresOf(rules);
   const genre = (f.genre && genres.find(g => g.name === f.genre))
     || (gen.genre !== "auto" && genres.find(g => g.name === gen.genre))
-    || pick(genres, "genre", g => g.name);
+    || moodPick(genres, "genre", mood.genres, g => g.name);
 
   let bpm = f.bpm;
   if (!bpm){
-    const [glo, ghi] = genre.bpm || [80, 140];
-    const bands = rules.bpmBands.filter(b => b.range[0] <= ghi && b.range[1] >= glo);
+    let [glo, ghi] = genre.bpm || [80, 140];
+    if (mood.bpm){
+      const lo2 = Math.max(glo, mood.bpm[0]), hi2 = Math.min(ghi, mood.bpm[1]);
+      if (lo2 <= hi2){ glo = lo2; ghi = hi2; }
+    }
+    let bands = rules.bpmBands.filter(b => b.range[0] <= ghi && b.range[1] >= glo);
+    const tempoBand = gen.tempo && gen.tempo !== "auto" && rules.bpmBands.find(b => b.name === gen.tempo);
+    if (tempoBand){
+      if (!(tempoBand.range[0] <= ghi && tempoBand.range[1] >= glo)){ glo = tempoBand.range[0]; ghi = tempoBand.range[1]; }
+      bands = [tempoBand];
+    }
     const band = bands.length ? pick(bands, "bpmBand", b => b.name) : null;
     const lo = band ? Math.max(glo, band.range[0]) : glo;
     const hi = band ? Math.min(ghi, band.range[1]) : ghi;
@@ -993,7 +1156,9 @@ function generateLoop({ fixed = null, bars: forcedBars = null } = {}){
       const filtered = keys.filter(k => genre.modes.includes(k.mode));
       if (filtered.length) keys = filtered;
     }
-    keyObj = pick(keys, "key", k => k.root + k.mode);
+    const kw = Object.assign({}, W.key || {});
+    if (mood.modes) keys.forEach(k => { kw[k.root + k.mode] = (kw[k.root + k.mode] ?? 1) * (mood.modes[k.mode] ?? 1); });
+    keyObj = weightedPick(keys, kw, k => k.root + k.mode);
   }
   const mode = keyObj.mode === "minor" ? "minor" : "major";
   const keyPc = pcFromName(keyObj.root);
@@ -1012,18 +1177,18 @@ function generateLoop({ fixed = null, bars: forcedBars = null } = {}){
       all.filter(p => modeOk(p)),
       all
     ];
-    prog = pick(pools.find(p => p.length), "progression", p => p.name);
+    prog = moodPick(pools.find(p => p.length), "progression", mood.progressions, p => p.name);
   }
 
   let density = f.density && densityOf(f.density);
   if (!density){
     const pool = genre.densities ? rules.rhythmDensities.filter(d => genre.densities.includes(d.name)) : rules.rhythmDensities;
-    density = pick(pool.length ? pool : rules.rhythmDensities, "density", d => d.name);
+    density = moodPick(pool.length ? pool : rules.rhythmDensities, "density", mood.densities, d => d.name);
   }
   const validChordStyles = (genre.chordStyles || Object.keys(CHORD_STYLES)).filter(s => CHORD_STYLES[s]);
   const validBassStyles = (genre.bassStyles || Object.keys(BASS_STYLES)).filter(s => BASS_STYLES[s]);
-  const chordStyle = f.chordStyle || pick(validChordStyles.length ? validChordStyles : ["sustain"], "chordStyle");
-  const bassStyle = f.bassStyle || pick(validBassStyles.length ? validBassStyles : ["follow"], "bassStyle");
+  const chordStyle = f.chordStyle || moodPick(validChordStyles.length ? validChordStyles : ["sustain"], "chordStyle", mood.chordStyles);
+  const bassStyle = f.bassStyle || moodPick(validBassStyles.length ? validBassStyles : ["follow"], "bassStyle", mood.bassStyles);
   const kits = (genre.kits || Object.keys(DRUM_KITS)).filter(k => DRUM_KITS[k]);
   const drumKit = gen.locks.kit || f.drumKit || pick(kits.length ? kits : ["standard"], "kit");
 
@@ -1033,22 +1198,31 @@ function generateLoop({ fixed = null, bars: forcedBars = null } = {}){
     if (locked && INSTRUMENTS[locked]) { instruments[role] = locked; return; }
     if (f.instruments && f.instruments[role]) { instruments[role] = f.instruments[role]; return; }
     const pool = ((genre.instruments || {})[role] || ROLE_INSTRUMENTS[role]).filter(id => INSTRUMENTS[id]);
-    instruments[role] = pick(pool.length ? pool : ROLE_INSTRUMENTS[role], "inst_" + role);
+    instruments[role] = moodPick(pool.length ? pool : ROLE_INSTRUMENTS[role], "inst_" + role, (mood.instruments || {})[role]);
   });
-  const sevenths = f.sevenths ?? chance(genre.sevenths ?? 0.2);
+  const sevenP = mood.sevenths != null ? ((genre.sevenths ?? 0.2) + mood.sevenths) / 2 : (genre.sevenths ?? 0.2);
+  const sevenths = f.sevenths ?? chance(sevenP);
   const swingRange = genre.swing || [0, 0];
   const swing = f.swing ?? Math.round(rand(swingRange[0], swingRange[1]) * 100) / 100;
 
   const scalePcs = SCALES[mode].map(iv => mod12(keyPc + iv));
-  const timeline = buildTimeline(prog, bars, keyPc, mode, sevenths);
+  const techProbs = {};
+  Object.keys(TECHNIQUES).forEach(t => {
+    if (gen.techniques && gen.techniques[t] === false) return;
+    techProbs[t] = Math.max(TECHNIQUES[t].base, (mood.techniques || {})[t] || 0);
+  });
+  const built = applyChordTechniques(buildTimeline(prog, bars, keyPc, mode, sevenths), keyPc, mode, techProbs);
+  const timeline = built.tl;
   const drum = generateDrums(density, bars);
   const chord = generateChords(timeline, chordStyle);
   const bass = generateBass(timeline, drum, bassStyle, scalePcs);
-  const melody = gen.melody === false ? [] : generateMelody(timeline, scalePcs, bars, genre.melody || [0.4, 0.7], keyPc);
+  const melodyRange = (genre.melody || [0.4, 0.7]).map(x => clamp(x * (mood.melody || 1), 0.1, 0.95));
+  const melody = gen.melody === false ? [] : generateMelody(timeline, scalePcs, bars, melodyRange, keyPc);
   const flats = usesFlats(keyPc, mode);
 
   const loop = {
     id: newId("loop"), version: 2, kind: "loop", createdAt: new Date().toISOString(),
+    mood: mood.name, techniques: built.used,
     genre: genre.name, bpm, bpmBandName: bandNameOf(rules, bpm), key: keyObj.root, mode,
     progressionName: prog.name, progressionLabel: prog.label || prog.name, progressionDegrees: prog.degrees.slice(),
     densityName: density.name, chordStyle, bassStyle, drumKit, instruments, sevenths, swing,
@@ -1062,6 +1236,7 @@ function generateLoop({ fixed = null, bars: forcedBars = null } = {}){
 
 function fixedFrom(loop){
   return {
+    mood: loop.mood,
     genre: loop.genre, bpm: loop.bpm, key: loop.key, mode: loop.mode, progression: loop.progressionName,
     density: loop.densityName, chordStyle: loop.chordStyle, bassStyle: loop.bassStyle, drumKit: loop.drumKit,
     instruments: Object.assign({}, loop.instruments), sevenths: loop.sevenths, swing: loop.swing
@@ -1087,6 +1262,70 @@ function chordAt(tl, step){
   let cur = tl[0];
   for (const t of tl){ if (t.step <= step) cur = t; else break; }
   return cur;
+}
+
+function makeChord(rootPc, intervals, extra){
+  return Object.assign({ rootPc: mod12(rootPc), intervals, pcs: intervals.map(i => mod12(rootPc + i)) }, extra || {});
+}
+/* コードの技法：タイムラインのコードを一部差し替え・分割する */
+function applyChordTechniques(tl, keyPc, mode, probs){
+  const used = new Set();
+  const out = [];
+  const dominantPc = mod12(keyPc + 7), subdomPc = mod12(keyPc + 5);
+  tl.forEach((t, i) => {
+    const next = tl[i + 1] || tl[0];
+    const half = t.len / 2;
+    const canSplit = t.len >= 8;
+    const hasSeventh = t.chord.intervals.length >= 4;
+    const split = (first, second, tech) => {
+      out.push(Object.assign({}, t, { len: half, chord: first }));
+      out.push(Object.assign({}, t, { step: t.step + half, len: t.len - half, chord: second, tech }));
+      used.add(tech);
+    };
+    if (canSplit && probs.sus4 && t.chord.rootPc === dominantPc && t.chord.intervals[1] === 4 && chance(probs.sus4)){
+      split(makeChord(t.chord.rootPc, hasSeventh ? [0, 5, 7, 10] : [0, 5, 7]), t.chord, "sus4");
+      return;
+    }
+    if (canSplit && probs.borrowed && mode === "major" && t.chord.rootPc === subdomPc && t.chord.intervals[1] === 4 && chance(probs.borrowed)){
+      split(t.chord, makeChord(subdomPc, hasSeventh ? [0, 3, 7, 10] : [0, 3, 7]), "borrowed");
+      return;
+    }
+    const target = next.chord.rootPc, domOfNext = mod12(target + 7);
+    if (canSplit && probs.secdom && target !== keyPc && target !== t.chord.rootPc && domOfNext !== t.chord.rootPc && chance(probs.secdom)){
+      split(t.chord, makeChord(domOfNext, [0, 4, 7, 10]), "secdom");
+      return;
+    }
+    out.push(t);
+  });
+  if (probs.tension){
+    out.forEach(t => {
+      const iv = t.chord.intervals;
+      const dimish = iv[1] === 3 && iv[2] === 6;
+      if (!dimish && iv[1] !== 5 && !iv.includes(14) && chance(probs.tension)){
+        t.chord = makeChord(t.chord.rootPc, iv.concat([14]));
+        used.add("tension");
+      }
+    });
+  }
+  if (probs.onchord && out.length > 1){
+    const dist = (a, b) => { const d = mod12(b - a); return Math.min(d, 12 - d); };
+    let prevBass = out[out.length - 1].chord.rootPc;
+    out.forEach((t, i) => {
+      const next = out[i + 1] || out[0];
+      const root = t.chord.rootPc;
+      let best = root, bestScore = dist(prevBass, root) + dist(root, next.chord.rootPc);
+      [t.chord.pcs[1], t.chord.pcs[2]].forEach(pc => {
+        const s = dist(prevBass, pc) + dist(pc, next.chord.rootPc) + 1;
+        if (s < bestScore){ best = pc; bestScore = s; }
+      });
+      if (i > 0 && best !== root && chance(Math.min(1, probs.onchord * 2))){
+        t.chord = Object.assign({}, t.chord, { bassPc: best });
+        used.add("onchord");
+      }
+      prevBass = t.chord.bassPc ?? root;
+    });
+  }
+  return { tl: out, used: [...used] };
 }
 
 function voiceChord(pcs, prev){
@@ -1185,8 +1424,8 @@ function generateBass(tl, drumEvents, style, scalePcs){
   const low = pc => { let m = pc + 36; if (m > 45) m -= 12; return m; };
   tl.forEach((t, idx) => {
     const next = tl[idx + 1] || tl[0];
-    const root = low(t.chord.rootPc);
-    const nextRoot = low(next.chord.rootPc);
+    const root = low(t.chord.bassPc ?? t.chord.rootPc);
+    const nextRoot = low(next.chord.bassPc ?? next.chord.rootPc);
     const fifth = nearestWithPc([t.chord.pcs[2] ?? mod12(t.chord.rootPc + 7)], root + 7);
     const S = t.step, L = t.len, E = S + L;
     const push = (step, dur, note, vel) => { if (step < E) out.push({ step, dur: Math.max(0.5, Math.min(dur, E - step)), note, vel: clampVel(vel) }); };
@@ -1715,6 +1954,7 @@ function stopPlayback(){
   rt.playing = null;
   cancelAnimationFrame(rt.raf);
   renderPlayhead(null);
+  renderLyricsView(displayedItem(), null);
   updateTransportUI();
 }
 async function playLoop(item){
@@ -1750,6 +1990,7 @@ async function playLoop(item){
     const pos = sec % dur;
     renderPlayhead(pos / dur);
     updateLcdPosition(item, pos);
+    if (item.lyricLines && item === displayedItem()) renderLyricsView(item, pos);
     rt.raf = requestAnimationFrame(frame);
   };
   rt.raf = requestAnimationFrame(frame);
@@ -1840,7 +2081,7 @@ function buildMidiBytes(item){
   const title = (item.meta && item.meta.title) || item.title || "Loop Studio";
   const us = Math.round(60000000 / item.bpm);
   const keyPc = pcFromName(item.key), majorPc = item.mode === "minor" ? mod12(keyPc + 3) : keyPc;
-  const SF = { 0: 0, 7: 1, 2: 2, 9: 3, 4: 4, 11: 5, 6: 6, 1: -5, 8: -4, 3: -3, 10: -2, 5: -1 };
+  const SF = SF_TABLE;
   tracks.push(serialize([
     Object.assign({ tick: 0, order: 0 }, meta(0x03, [...enc.encode(title)])),
     Object.assign({ tick: 0, order: 0 }, meta(0x51, [(us >> 16) & 0xFF, (us >> 8) & 0xFF, us & 0xFF])),
@@ -1851,6 +2092,7 @@ function buildMidiBytes(item){
     const evs = [Object.assign({ tick: 0, order: 0 }, meta(0x03, [...enc.encode(name)]))];
     if (program != null) evs.push({ tick: 0, order: 0, bytes: [0xC0 | channel, program & 0x7F] });
     notes.forEach(n => {
+      if (n.lyric) evs.push(Object.assign({ tick: n.tick, order: 1.5 }, meta(0x05, [...enc.encode(n.lyric)])));
       evs.push({ tick: n.tick, order: 2, bytes: [0x90 | channel, n.pitch & 0x7F, clampVel(n.vel)] });
       evs.push({ tick: n.tick + Math.max(1, n.len), order: 1, bytes: [0x80 | channel, n.pitch & 0x7F, 0] });
     });
@@ -1864,12 +2106,66 @@ function buildMidiBytes(item){
   noteTrack("Chords", 1, prog("chord"), item.events.chord.flatMap(e => e.notes.map((n, i) => ({
     tick: tickOf(e.step) + (e.strum ? (e.strum > 0 ? i : e.notes.length - 1 - i) * 6 : 0), len: Math.round(e.dur * TPS) - 8, pitch: n, vel: e.vel ?? 80 }))));
   if ((item.events.melody || []).length){
-    noteTrack("Melody", 2, prog("melody"), item.events.melody.map(e => ({ tick: tickOf(e.step), len: Math.round(e.dur * TPS) - 8, pitch: e.note, vel: e.vel ?? 90 })));
+    const hasLyric = item.events.melody.some(e => e.lyric);
+    noteTrack(hasLyric ? "Vocal" : "Melody", 2, prog("melody"), item.events.melody.map(e => ({ tick: tickOf(e.step), len: Math.round(e.dur * TPS) - 8, pitch: e.note, vel: e.vel ?? 90, lyric: e.lyric })));
   }
   const header = [0x4D, 0x54, 0x68, 0x64, 0, 0, 0, 6, 0, 1, (tracks.length >> 8) & 0xFF, tracks.length & 0xFF, (TPQ >> 8) & 0xFF, TPQ & 0xFF];
   const bytes = [...header];
   tracks.forEach(t => bytes.push(0x4D, 0x54, 0x72, 0x6B, (t.length >>> 24) & 0xFF, (t.length >>> 16) & 0xFF, (t.length >>> 8) & 0xFF, t.length & 0xFF, ...t));
   return new Uint8Array(bytes);
+}
+
+/* ---------- MusicXML（メロディ＋歌詞：歌声合成ソフト用） ---------- */
+function buildMusicXML(item){
+  const DPS = 2, DIV = DPS * 4; // 1ステップ（16分音符）＝2 division
+  const esc = s => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  const total = item.bars * STEPS;
+  const mel = (item.events.melody || []).slice().sort((a, b) => a.step - b.step);
+  const notes = mel.map((e, i) => ({
+    start: e.step, end: Math.min(e.step + e.dur, i + 1 < mel.length ? mel[i + 1].step : total, total), pitch: e.note, lyric: e.lyric
+  })).filter(n => n.end > n.start);
+  const keyPc = pcFromName(item.key), majorPc = item.mode === "minor" ? mod12(keyPc + 3) : keyPc;
+  const TYPES = [[32, "whole", 0], [24, "half", 1], [16, "half", 0], [12, "quarter", 1], [8, "quarter", 0], [6, "eighth", 1], [4, "eighth", 0], [3, "16th", 1], [2, "16th", 0], [1, "32nd", 0]];
+  const pieces = d => { const out = []; let r = Math.round(d); while (r > 0){ const t = TYPES.find(x => x[0] <= r); out.push(t); r -= t[0]; } return out; };
+  const STEP_NAMES = [["C", 0], ["C", 1], ["D", 0], ["D", 1], ["E", 0], ["F", 0], ["F", 1], ["G", 0], ["G", 1], ["A", 0], ["A", 1], ["B", 0]];
+  const pitchXml = m => { const [st, alt] = STEP_NAMES[mod12(m)]; return "<pitch><step>" + st + "</step>" + (alt ? "<alter>1</alter>" : "") + "<octave>" + (Math.floor(m / 12) - 1) + "</octave></pitch>"; };
+  const noteXml = (divs, pitch, tieStart, tieStop, lyric) => pieces(divs).map((p, i, ps) => {
+    const tStop = pitch != null && (i > 0 || tieStop), tStart = pitch != null && (i < ps.length - 1 || tieStart);
+    let x = "<note>" + (pitch == null ? "<rest/>" : pitchXml(pitch)) + "<duration>" + p[0] + "</duration>";
+    if (tStop) x += '<tie type="stop"/>';
+    if (tStart) x += '<tie type="start"/>';
+    x += "<voice>1</voice><type>" + p[1] + "</type>" + (p[2] ? "<dot/>" : "");
+    if (tStop || tStart) x += "<notations>" + (tStop ? '<tied type="stop"/>' : "") + (tStart ? '<tied type="start"/>' : "") + "</notations>";
+    if (lyric && i === 0) x += '<lyric number="1"><syllabic>single</syllabic><text>' + esc(lyric) + "</text></lyric>";
+    return x + "</note>";
+  }).join("");
+  let body = "";
+  for (let m = 0; m < item.bars; m++){
+    const mStart = m * STEPS, mEnd = mStart + STEPS;
+    let x = '<measure number="' + (m + 1) + '">';
+    if (m === 0){
+      x += "<attributes><divisions>" + DIV + "</divisions><key><fifths>" + SF_TABLE[majorPc] + "</fifths><mode>" + (item.mode === "minor" ? "minor" : "major") + "</mode></key>"
+        + "<time><beats>4</beats><beat-type>4</beat-type></time><clef><sign>G</sign><line>2</line></clef></attributes>"
+        + '<direction placement="above"><direction-type><metronome><beat-unit>quarter</beat-unit><per-minute>' + item.bpm + '</per-minute></metronome></direction-type><sound tempo="' + item.bpm + '"/></direction>';
+    }
+    let cur = mStart;
+    notes.forEach(n => {
+      if (n.end <= mStart || n.start >= mEnd) return;
+      const s = Math.max(n.start, mStart), e = Math.min(n.end, mEnd);
+      if (s > cur) x += noteXml((s - cur) * DPS, null);
+      x += noteXml((e - s) * DPS, n.pitch, n.end > mEnd, n.start < mStart, s === n.start ? n.lyric : null);
+      cur = e;
+    });
+    if (cur < mEnd) x += noteXml((mEnd - cur) * DPS, null);
+    body += x + "</measure>";
+  }
+  const title = (item.meta && item.meta.title) || item.title || "Loop Studio";
+  const partName = mel.some(e => e.lyric) ? "Vocal" : "Melody";
+  return '<?xml version="1.0" encoding="UTF-8"?>\n'
+    + '<!DOCTYPE score-partwise PUBLIC "-//Recordare//DTD MusicXML 4.0 Partwise//EN" "http://www.musicxml.org/dtds/partwise.dtd">\n'
+    + '<score-partwise version="4.0"><work><work-title>' + esc(title) + '</work-title></work>'
+    + '<part-list><score-part id="P1"><part-name>' + partName + '</part-name></score-part></part-list>'
+    + '<part id="P1">' + body + "</part></score-partwise>\n";
 }
 
 /* =========================================================================
@@ -1912,17 +2208,18 @@ const SONG_TEMPLATES = {
 };
 function sectionFromType(type, bars, loopId){
   const t = SECTION_TYPES[type] || SECTION_TYPES.verse;
-  return { type, bars, loopId: loopId || "", drums: t.drums, bass: t.bass, chord: t.chord, melody: t.melody };
+  return { type, bars, loopId: loopId || "", shift: 0, drums: t.drums, bass: t.bass, chord: t.chord, melody: t.melody };
 }
 function bestLoops(){
   return state.savedLoops.slice().sort((a, b) => (b.rating || 0) - (a.rating || 0) || (b.sales || 0) - (a.sales || 0) || String(b.createdAt).localeCompare(String(a.createdAt)));
 }
 function newSongDraft(templateName = "pop", baseLoopId = null){
   const base = (baseLoopId && findLoop(baseLoopId)) || bestLoops()[0];
-  return {
+  return normalizeSong({
     id: null, kind: "songdef", title: "", template: templateName, baseLoopId: base ? base.id : "",
-    sections: SONG_TEMPLATES[templateName].sections.map(([type, bars]) => sectionFromType(type, bars, ""))
-  };
+    sections: SONG_TEMPLATES[templateName].sections.map(([type, bars]) => sectionFromType(type, bars, "")),
+    techniques: { breakBeforeChorus: true, halfTimePre: false }, vocal: "instrument", modulation: "none", lyrics: null
+  });
 }
 function autoAssignSong(song){
   const base = findLoop(song.baseLoopId) || bestLoops()[0];
@@ -1939,18 +2236,91 @@ function transposeInterval(fromPc, toPc){
   return d;
 }
 
+const SHIFT_OPTIONS = [[-2, "-2 全音↓"], [-1, "-1 半音↓"], [0, "±0"], [1, "+1 半音↑"], [2, "+2 全音↑"], [3, "+3 短3度↑"], [4, "+4 長3度↑"], [5, "+5 4度↑"]];
+const MOD_PRESETS = {
+  none:      { label: "なし（すべて ±0）" },
+  lastUp1:   { label: "ラスサビで半音上げ", last: 1 },
+  lastUp2:   { label: "ラスサビで全音上げ", last: 2 },
+  lastUp3:   { label: "ラスサビで短3度上げ", last: 3 },
+  chorusUp2: { label: "サビだけ全音上げ（戻ってくる）", chorus: 2 },
+  custom:    { label: "カスタム（表で個別に指定）" }
+};
+function applyModPreset(song, name){
+  const p = MOD_PRESETS[name] || MOD_PRESETS.none;
+  song.modulation = name;
+  if (name === "custom") return;
+  song.sections.forEach(s => { s.shift = 0; });
+  if (p.last){
+    let last = -1;
+    song.sections.forEach((s, i) => { if (s.type === "chorus") last = i; });
+    if (last >= 0) for (let i = last; i < song.sections.length; i++) song.sections[i].shift = p.last;
+  }
+  if (p.chorus) song.sections.forEach(s => { if (s.type === "chorus") s.shift = p.chorus; });
+}
+
+/* ---------- 歌詞：音（モーラ・音節）への分解とメロディへの割り当て ---------- */
+const SMALL_KANA = "ゃゅょぁぃぅぇぉゎャュョァィゥェォヮ";
+function splitUnits(text){
+  const s = String(text || "").normalize("NFKC").trim();
+  if (!s) return [];
+  if (/[぀-ヿ一-鿿]/.test(s)){
+    const units = [];
+    for (const ch of s.replace(/[\s、。,.!?「」『』()・…~〜]/g, "")){
+      if (SMALL_KANA.includes(ch) && units.length) units[units.length - 1] += ch;
+      else units.push(ch);
+    }
+    return units;
+  }
+  return s.split(/[\s\-‐]+/).map(w => w.replace(/[^\p{L}\p{N}']/gu, "")).filter(Boolean);
+}
+// 音符の数を歌詞の音数に合わせる：多ければ短い音を前の音につなげ、少なければ長い音を分割する
+function fitLyricsToNotes(notes, units, windowEnd){
+  const ns = notes.map(n => Object.assign({}, n));
+  let us = units.slice();
+  while (ns.length > us.length && ns.length > 1){
+    let idx = 1;
+    for (let i = 2; i < ns.length; i++) if (ns[i].dur < ns[idx].dur) idx = i;
+    const prev = ns[idx - 1];
+    prev.dur = Math.min(windowEnd, ns[idx].step + ns[idx].dur) - prev.step;
+    ns.splice(idx, 1);
+  }
+  while (ns.length < us.length){
+    let idx = 0;
+    ns.forEach((n, i) => { if (n.dur > ns[idx].dur) idx = i; });
+    const n = ns[idx];
+    if (n.dur < 1){
+      us = us.slice(0, ns.length - 1).concat([us.slice(ns.length - 1).join("")]);
+      break;
+    }
+    const first = n.dur >= 2 ? Math.floor(n.dur / 2) : 0.5;
+    ns.splice(idx + 1, 0, Object.assign({}, n, { step: n.step + first, dur: n.dur - first, vel: clampVel((n.vel || 90) - 6) }));
+    n.dur = first;
+  }
+  ns.forEach((n, i) => { n.lyric = us[i]; });
+  return ns;
+}
+
 /* ソング定義 → 再生・書き出しできるイベント列に展開 */
 function buildSongItem(song){
   const base = findLoop(song.baseLoopId) || song.sections.map(s => findLoop(s.loopId)).find(Boolean);
   if (!base) return null;
   const basePc = pcFromName(base.key);
+  const tech = song.techniques || {};
   const events = { drum: [], bass: [], chord: [], melody: [] };
   const sections = [];
+  const ranges = [];
+  const low = pc => { let m = mod12(pc) + 36; if (m > 45) m -= 12; return m; };
+  const inWin = (e, a, b) => e.step >= a && e.step < b;
+  const clearWindow = (parts, a, b) => parts.forEach(p => {
+    events[p] = events[p].filter(e => !inWin(e, a, b));
+    events[p].forEach(e => { if (e.dur != null && e.step < a && e.step + e.dur > a) e.dur = a - e.step; });
+  });
   let cursor = 0;
   song.sections.forEach((sec, idx) => {
     const src = findLoop(sec.loopId) || base;
-    const shift = transposeInterval(pcFromName(src.key), basePc);
-    const secStart = cursor * STEPS, secSteps = sec.bars * STEPS, srcSteps = src.bars * STEPS;
+    const shift = transposeInterval(pcFromName(src.key), basePc) + (sec.shift || 0);
+    const secStart = cursor * STEPS, secSteps = sec.bars * STEPS, srcSteps = src.bars * STEPS, secEnd = secStart + secSteps;
+    const halfTime = tech.halfTimePre && sec.type === "pre" && sec.drums;
     for (let off = 0; off < secSteps; off += srcSteps){
       const add = (part, list, map) => list.forEach(e => {
         const local = e.step + off;
@@ -1959,37 +2329,126 @@ function buildSongItem(song){
         if (ne.dur != null) ne.dur = Math.min(ne.dur, secSteps - local);
         events[part].push(ne);
       });
-      if (sec.drums) add("drum", src.events.drum.filter(e => sec.drums === 2 || e.part === "kick" || (e.part === "hihat" && !e.open)),
+      if (sec.drums && !halfTime) add("drum", src.events.drum.filter(e => sec.drums === 2 || e.part === "kick" || (e.part === "hihat" && !e.open)),
         e => (sec.drums === 1 ? Object.assign(e, { vel: clampVel((e.vel || 100) * 0.85) }) : e));
       if (sec.bass) add("bass", src.events.bass, e => Object.assign(e, { note: e.note + shift }));
       if (sec.chord) add("chord", src.events.chord, e => Object.assign(e, { notes: e.notes.map(n => n + shift) }));
       if (sec.melody) add("melody", src.events.melody || [], e => Object.assign(e, { note: e.note + shift }));
     }
+    if (halfTime){
+      for (let b = 0; b < sec.bars; b++){
+        const s0 = secStart + b * STEPS;
+        events.drum.push({ step: s0, part: "kick", vel: 110 });
+        if (sec.drums === 2) events.drum.push({ step: s0 + 8, part: "snare", vel: 104 });
+        [0, 4, 8, 12].forEach(o => events.drum.push({ step: s0 + o, part: "hihat", vel: o === 0 ? 86 : 66 }));
+      }
+    }
     const next = song.sections[idx + 1];
     if (sec.drums && next && next.type !== sec.type && sec.bars >= 2){
-      const lastBar = secStart + secSteps - STEPS;
-      const tmp = events.drum.filter(e => e.step >= lastBar && e.step < secStart + secSteps);
-      events.drum = events.drum.filter(e => !(e.step >= lastBar && e.step < secStart + secSteps));
+      const lastBar = secEnd - STEPS;
+      const tmp = events.drum.filter(e => inWin(e, lastBar, secEnd));
+      events.drum = events.drum.filter(e => !inWin(e, lastBar, secEnd));
       addFill(tmp, lastBar, next.type === "chorus" ? 8 : 4);
       events.drum.push(...tmp);
     }
-    sections.push({ bar: cursor, bars: sec.bars, label: (SECTION_TYPES[sec.type] || {}).label || sec.type });
+    // 転調：次のセクションのキーのドミナント（V7）を直前に挟んで自然につなぐ
+    if (next && sec.chord && (next.shift || 0) !== (sec.shift || 0)){
+      const w = Math.min(8, secSteps);
+      const domRoot = mod12(basePc + (next.shift || 0) + 7);
+      clearWindow(["chord", "bass", "melody"], secEnd - w, secEnd);
+      events.chord.push({ step: secEnd - w, dur: w, notes: voiceChord([domRoot, mod12(domRoot + 4), mod12(domRoot + 7), mod12(domRoot + 10)], null), vel: 86 });
+      if (sec.bass) events.bass.push({ step: secEnd - w, dur: w, note: low(domRoot), vel: 100 });
+    }
+    // サビ前ブレイク：サビ直前の1拍を全パート無音に
+    if (tech.breakBeforeChorus && next && next.type === "chorus" && sec.type !== "chorus"){
+      clearWindow(["drum", "bass", "chord", "melody"], secEnd - 4, secEnd);
+    }
+    const shiftLabel = sec.shift ? "（" + (sec.shift > 0 ? "+" : "") + sec.shift + "）" : "";
+    sections.push({ bar: cursor, bars: sec.bars, label: ((SECTION_TYPES[sec.type] || {}).label || sec.type) + shiftLabel });
+    ranges.push({ start: secStart, end: secEnd, idx });
     cursor += sec.bars;
   });
-  // エンディング：トニックの和音を1小節伸ばして終わる
+  // 歌声の音域に合わせてメロディをオクターブ移動
+  if (song.vocal === "female" || song.vocal === "male"){
+    const notes = events.melody.map(e => e.note).sort((a, b) => a - b);
+    if (notes.length){
+      const median = notes[Math.floor(notes.length / 2)];
+      const oct = Math.round(((song.vocal === "female" ? 67 : 57) - median) / 12) * 12;
+      if (oct) events.melody.forEach(e => { e.note += oct; });
+    }
+  }
+  // 歌詞をメロディに割り当てる（1行＝2小節）
+  const lyricLines = [];
+  const lySections = song.lyrics && song.lyrics.sections;
+  if (lySections){
+    ranges.forEach(r => {
+      const secLy = lySections[r.idx];
+      if (!secLy || !secLy.lines || !song.sections[r.idx].melody) return;
+      secLy.lines.forEach((line, j) => {
+        const a = r.start + j * PHRASE_STEPS, b = Math.min(r.end, a + PHRASE_STEPS);
+        if (a >= r.end || !line) return;
+        const units = splitUnits(line.reading || line.text);
+        if (!units.length) return;
+        const phrase = events.melody.filter(e => inWin(e, a, b)).sort((x, y) => x.step - y.step);
+        if (!phrase.length) return;
+        const fitted = fitLyricsToNotes(phrase, units, b);
+        events.melody = events.melody.filter(e => !inWin(e, a, b)).concat(fitted);
+        lyricLines.push({ start: a, end: b, secIdx: r.idx, section: sections[r.idx].label, text: line.text || "", units: fitted.map(n => ({ step: n.step, text: n.lyric })) });
+      });
+    });
+  }
+  // エンディング：最後のキーのトニックを1小節伸ばして終わる
   const endStep = cursor * STEPS;
-  const tonicPcs = buildChord(base.mode === "minor" ? "i" : "I", basePc, base.mode, false).pcs;
+  const lastShift = (song.sections[song.sections.length - 1] || {}).shift || 0;
+  const endPc = mod12(basePc + lastShift);
+  const tonicPcs = buildChord(base.mode === "minor" ? "i" : "I", endPc, base.mode, false).pcs;
   events.chord.push({ step: endStep, dur: STEPS, notes: voiceChord(tonicPcs, null), vel: 80 });
-  events.bass.push({ step: endStep, dur: STEPS, note: mod12(basePc) + 36 > 45 ? mod12(basePc) + 24 : mod12(basePc) + 36, vel: 96 });
+  events.bass.push({ step: endStep, dur: STEPS, note: low(endPc), vel: 96 });
   events.drum.push({ step: endStep, part: "kick", vel: 112 }, { step: endStep, part: "hihat", open: true, vel: 100 });
   sections.push({ bar: cursor, bars: 1, label: "エンド" });
   Object.values(events).forEach(list => list.sort((a, b) => a.step - b.step));
+  const songTechniques = [];
+  if (song.sections.some(s => s.shift)) songTechniques.push((MOD_PRESETS[song.modulation] || MOD_PRESETS.custom).label);
+  if (tech.breakBeforeChorus && song.sections.some(s => s.type === "chorus")) songTechniques.push("サビ前ブレイク");
+  if (tech.halfTimePre && song.sections.some(s => s.type === "pre")) songTechniques.push("Bメロ ハーフテンポ");
   return {
-    id: song.id || "song_draft", kind: "song", title: song.title || "無題のソング", meta: song.meta,
+    id: song.id || "song_draft", kind: "song", title: song.title || (song.lyrics && song.lyrics.title) || "無題のソング", meta: song.meta,
+    mood: base.mood, techniques: base.techniques, songTechniques, vocal: song.vocal,
     genre: base.genre, bpm: base.bpm, key: base.key, mode: base.mode, bars: cursor + 1, stepsPerBar: STEPS,
     swing: base.swing, instruments: Object.assign({}, base.instruments), drumKit: base.drumKit,
-    progressionLabel: base.progressionLabel, chordNames: [], sections, events
+    progressionLabel: base.progressionLabel, chordNames: [], sections, events, lyricLines,
+    lyricsTheme: song.lyricsSettings && song.lyricsSettings.theme
   };
+}
+
+/* 各セクション・各行（2小節）のメロディの音符数：作詞の目安 */
+function lyricTargets(song){
+  const item = buildSongItem(Object.assign({}, song, { lyrics: null }));
+  if (!item) return null;
+  const targets = [];
+  let cursor = 0;
+  song.sections.forEach((sec, idx) => {
+    const start = cursor * STEPS, end = start + sec.bars * STEPS;
+    cursor += sec.bars;
+    if (!sec.melody) return;
+    const lines = [];
+    for (let a = start; a < end; a += PHRASE_STEPS){
+      const b = Math.min(end, a + PHRASE_STEPS);
+      lines.push(item.events.melody.filter(e => e.step >= a && e.step < b).length);
+    }
+    targets.push({ section_index: idx, label: (SECTION_TYPES[sec.type] || {}).label || sec.type, bars: sec.bars, target_morae_per_line: lines });
+  });
+  return { item, targets };
+}
+function lyricsText(item){
+  if (!item || !item.lyricLines || !item.lyricLines.length) return null;
+  let out = (item.title || "") + "\n";
+  let last = null;
+  item.lyricLines.forEach(l => {
+    if (l.secIdx !== last){ out += "\n[" + l.section + "]\n"; last = l.secIdx; }
+    out += (l.text || l.units.map(u => u.text).join("")) + "\n";
+  });
+  return out;
 }
 
 /* =========================================================================
@@ -2005,7 +2464,7 @@ function loadAnthropic(){
   }
   return anthropicModPromise;
 }
-async function callClaudeJSON(system, userText, schema){
+async function callClaudeJSON(system, userText, schema, { effort = "low" } = {}){
   if (!state.settings.apiKey) throw new Error("APIキーが設定されていません（設定 → Claude API）");
   let mod;
   try { mod = await loadAnthropic(); }
@@ -2020,7 +2479,7 @@ async function callClaudeJSON(system, userText, schema){
       max_tokens: 16000,
       betas: ["server-side-fallback-2026-07-01"],
       fallbacks: "default",
-      output_config: { effort: "low", format: { type: "json_schema", schema } },
+      output_config: { effort, format: { type: "json_schema", schema } },
       system,
       messages: [{ role: "user", content: userText }]
     });
@@ -2042,6 +2501,10 @@ function describeItemForAI(item){
   const isSong = item.kind === "song";
   return {
     type: isSong ? "song" : "loop",
+    mood: item.mood ? moodLabel(item.mood) : undefined,
+    techniques: techniqueLabels(item.techniques).concat(item.songTechniques || []),
+    lyrics_theme: isSong ? item.lyricsTheme || undefined : undefined,
+    lyrics_excerpt: isSong && item.lyricLines && item.lyricLines.length ? item.lyricLines.slice(0, 4).map(l => l.text).join(" / ") : undefined,
     genre: genreLabel(item.genre),
     bpm: item.bpm,
     key: keyLong(item),
@@ -2097,6 +2560,65 @@ function applyMeta(item, meta){
   renderNow();
 }
 
+const LYRICS_SYSTEM = [
+  "あなたはプロの作詞家です。与えられた曲構成とメロディの音数に合わせて、オリジナルの歌詞を書いてください。",
+  "- sections[].target_morae_per_line は、各行（2小節ぶんのフレーズ）のメロディの音符数です。各行の reading の音数をこの数にできるだけ合わせてください。",
+  "- 日本語の音の数え方：ひらがな1文字＝1音。ただし小さい「ゃ・ゅ・ょ・ぁ・ぃ・ぅ・ぇ・ぉ」は前の文字とあわせて1音。「っ」「ん」「ー」はそれぞれ1音。",
+  "- text は表示用の歌詞（漢字かな混じり）、reading はその読みをすべてひらがなで書いてください。英語の歌詞は reading を音節ごとにハイフンかスペースで区切ってください（例: shi-ning stars）。",
+  "- 目標の音数が0の行は text と reading を空文字にしてください。",
+  "- Aメロは情景や状況、Bメロは感情の高まり、サビは一番伝えたいことを、という流れで。サビには短く覚えやすいフックを入れ、サビが複数あるときは同じフックを繰り返してください。",
+  "- 既存の楽曲の歌詞やタイトルを引用・模倣しないでください。特定の実在の人物や商標は使わないでください。"
+].join("\n");
+
+async function generateLyrics(song, settings){
+  const t = lyricTargets(song);
+  if (!t) throw new Error("ソングにループが割り当てられていません");
+  if (!t.targets.length) throw new Error("メロディがオンのセクションがありません（ソングビルダーの「メロディ」にチェックしてください）");
+  const base = findLoop(song.baseLoopId) || t.item;
+  const langText = { ja: "日本語", "ja-en": "日本語（サビに短い英語フレーズを混ぜてよい）", en: "英語" }[settings.lang] || "日本語";
+  const schema = {
+    type: "object",
+    properties: {
+      title: { type: "string", description: "曲のタイトル案" },
+      sections: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: {
+            section_index: { type: "integer", enum: t.targets.map(x => x.section_index) },
+            lines: {
+              type: "array",
+              items: { type: "object", properties: { text: { type: "string" }, reading: { type: "string" } }, required: ["text", "reading"], additionalProperties: false }
+            }
+          },
+          required: ["section_index", "lines"],
+          additionalProperties: false
+        }
+      }
+    },
+    required: ["title", "sections"],
+    additionalProperties: false
+  };
+  const brief = {
+    theme: settings.theme, keywords: settings.keywords || undefined, language: langText,
+    song_title_hint: song.title || undefined, mood: base.mood ? moodLabel(base.mood) : undefined,
+    genre: genreLabel(base.genre), bpm: base.bpm, key: keyLong(base), sections: t.targets
+  };
+  const res = await callClaudeJSON(LYRICS_SYSTEM, "次の曲に歌詞を付けてください。\n" + JSON.stringify(brief, null, 2), schema, { effort: "medium" });
+  const sections = song.sections.map(() => null);
+  (res.sections || []).forEach(s => {
+    const tg = t.targets.find(x => x.section_index === s.section_index);
+    if (!tg) return;
+    sections[s.section_index] = {
+      lines: tg.target_morae_per_line.map((_, j) => {
+        const l = (s.lines || [])[j] || {};
+        return { text: String(l.text || ""), reading: String(l.reading || "") };
+      })
+    };
+  });
+  return { title: String(res.title || ""), sections, generatedAt: new Date().toISOString() };
+}
+
 async function proposeSongStructure(purpose, request){
   const loops = bestLoops().slice(0, 30);
   if (!loops.length) throw new Error("ライブラリにループがありません。先にループを保存してください。");
@@ -2115,32 +2637,39 @@ async function proposeSongStructure(purpose, request){
             type: { type: "string", enum: Object.keys(SECTION_TYPES) },
             bars: { type: "integer", description: "小節数（2〜16、4の倍数を推奨）" },
             loop_id: { type: "string", enum: loops.map(l => l.id) },
+            shift: { type: "integer", enum: SHIFT_OPTIONS.map(o => o[0]), description: "基準キーからの転調（半音単位）。ラスサビで +1 や +2 に上げるなど" },
             drums: { type: "integer", enum: [0, 1, 2], description: "0=なし 1=軽め 2=フル" },
             bass: { type: "boolean" }, chord: { type: "boolean" }, melody: { type: "boolean" }
           },
-          required: ["type", "bars", "loop_id", "drums", "bass", "chord", "melody"],
+          required: ["type", "bars", "loop_id", "shift", "drums", "bass", "chord", "melody"],
           additionalProperties: false
         }
       },
+      break_before_chorus: { type: "boolean", description: "サビ直前の1拍を無音にするか" },
+      half_time_pre: { type: "boolean", description: "Bメロのドラムをハーフテンポにするか" },
       notes: { type: "string", description: "構成の意図の短い説明（日本語）" }
     },
-    required: ["title", "base_loop_id", "sections", "notes"],
+    required: ["title", "base_loop_id", "sections", "break_before_chorus", "half_time_pre", "notes"],
     additionalProperties: false
   };
-  const system = "あなたは作曲・編曲の専門家です。ユーザーのライブラリにある短いループ素材を並べて1曲を構成します。セクション種別: intro=イントロ, verse=Aメロ, pre=Bメロ, chorus=サビ, bridge=間奏, outro=アウトロ。同じモード（メジャー/マイナー）のループ同士を組み合わせ、評価や販売数の高いループをサビに使い、パートの抜き差し（drums/bass/chord/melody）で展開と盛り上がりを作ってください。キーとテンポは基準ループに自動で揃えられます。";
+  const system = "あなたは作曲・編曲の専門家です。ユーザーのライブラリにある短いループ素材を並べて1曲を構成します。セクション種別: intro=イントロ, verse=Aメロ, pre=Bメロ, chorus=サビ, bridge=間奏, outro=アウトロ。同じモード（メジャー/マイナー）のループ同士を組み合わせ、評価や販売数の高いループをサビに使い、パートの抜き差し（drums/bass/chord/melody）で展開と盛り上がりを作ってください。キーとテンポは基準ループに自動で揃えられます。転調（shift）、サビ前ブレイク、Bメロのハーフテンポなどの技法は、目的に合う場合だけ使ってください（転調の直前には自動でドミナントが挿入されます）。";
   const user = "目的: " + purpose + (request ? "\n追加の要望: " + request : "") + "\n\nライブラリのループ:\n" + JSON.stringify(summary, null, 2);
   const res = await callClaudeJSON(system, user, schema);
   const ids = new Set(loops.map(l => l.id));
-  const draft = {
+  const prev = state.songDraft || {};
+  const draft = normalizeSong({
     id: null, kind: "songdef", title: res.title || "", template: "", baseLoopId: ids.has(res.base_loop_id) ? res.base_loop_id : loops[0].id,
     sections: (res.sections || []).slice(0, 40).map(s => ({
       type: SECTION_TYPES[s.type] ? s.type : "verse",
       bars: clamp(parseInt(s.bars, 10) || 4, 1, 32),
       loopId: ids.has(s.loop_id) ? s.loop_id : "",
+      shift: SHIFT_OPTIONS.some(o => o[0] === s.shift) ? s.shift : 0,
       drums: [0, 1, 2].includes(s.drums) ? s.drums : 2,
       bass: !!s.bass, chord: !!s.chord, melody: !!s.melody
-    }))
-  };
+    })),
+    techniques: { breakBeforeChorus: !!res.break_before_chorus, halfTimePre: !!res.half_time_pre },
+    modulation: "custom", vocal: prev.vocal || "instrument", lyricsSettings: prev.lyricsSettings, lyrics: null
+  });
   if (!draft.sections.length) throw new Error("構成案が空でした。もう一度お試しください。");
   return { draft, notes: res.notes };
 }
@@ -2170,7 +2699,10 @@ function metadataFor(item){
   return {
     title: m.title || null, title_ja: m.title_ja || item.title || null, description: m.description || null, tags: m.tags || [],
     mood: m.mood || null, use_cases: m.use_cases || [],
-    type: item.kind === "song" ? "song" : "loop", genre: genreLabel(item.genre), bpm: item.bpm, key: keyLong(item),
+    type: item.kind === "song" ? "song" : "loop", genre: genreLabel(item.genre), mood: item.mood ? moodLabel(item.mood) : null,
+    techniques: techniqueLabels(item.techniques).concat(item.songTechniques || []),
+    lyrics: item.lyricLines && item.lyricLines.length ? { theme: item.lyricsTheme || null, lines: item.lyricLines.map(l => ({ section: l.section, text: l.text, reading: l.units.map(u => u.text).join("") })) } : undefined,
+    bpm: item.bpm, key: keyLong(item),
     bars: item.bars, duration_sec: Math.round(loopDuration(item) * 100) / 100,
     chord_progression: item.progressionLabel || null, chords: (item.chordNames || []).map(c => c.name),
     instruments: Object.fromEntries(MELODIC_ROLES.map(r => [r, instLabel((item.instruments || {})[r])])),
@@ -2205,6 +2737,9 @@ async function addItemToZip(zip, item, folder, onStep){
     zip.file(dir + "stems/" + base + "_" + group + ".wav", encodeWav(await renderItemAudio(item, { parts }), parseInt(state.settings.bitDepth, 10)));
   }
   zip.file(dir + base + ".mid", buildMidiBytes(item));
+  if ((item.events.melody || []).length) zip.file(dir + base + "_melody.musicxml", buildMusicXML(item));
+  const lyr = lyricsText(item);
+  if (lyr) zip.file(dir + base + "_lyrics.txt", lyr);
   zip.file(dir + "metadata.json", JSON.stringify(metadataFor(item), null, 2));
   zip.file(dir + "README.txt", readmeFor(item));
 }
@@ -2217,6 +2752,13 @@ async function exportItem(kind, item = displayedItem()){
       downloadBlob(base + ".json", new Blob([JSON.stringify(item, null, 2)], { type: "application/json" }));
     } else if (kind === "midi"){
       downloadBlob(base + ".mid", new Blob([buildMidiBytes(item)], { type: "audio/midi" }));
+    } else if (kind === "musicxml"){
+      if (!(item.events.melody || []).length){ toast("メロディがありません（メロディをオンにして生成してください）"); return; }
+      downloadBlob(base + ".musicxml", new Blob([buildMusicXML(item)], { type: "application/vnd.recordare.musicxml+xml" }));
+    } else if (kind === "lyrics"){
+      const txt = lyricsText(item);
+      if (!txt){ toast("歌詞がありません（ソングビルダーで歌詞を付けて「ソングを再生・表示」してください）"); return; }
+      downloadBlob(base + "_lyrics.txt", new Blob([txt], { type: "text/plain;charset=utf-8" }));
     } else if (kind === "wav"){
       toast("WAVを書き出し中…", 120000);
       const audio = await renderItemAudio(item);
@@ -2365,13 +2907,17 @@ function renderNow(){
   const chips = el("nowChips");
   chips.replaceChildren();
   const chip = (label, value) => { if (value) chips.append(h("span", { class: "chip" }, label + " ", h("b", {}, value))); };
+  chip("雰囲気", item.mood ? moodLabel(item.mood) : null);
   if (item.kind === "song"){
     chip("構成", item.sections.map(s => s.label).join(" → "));
+    chip("展開", (item.songTechniques || []).join("・") || null);
+    chip("歌詞", item.lyricLines && item.lyricLines.length ? item.lyricLines.length + "行" : null);
   } else {
     chip("リズム", densityLabel(item.densityName));
     chip("コード奏法", CHORD_STYLES[item.chordStyle]);
     chip("ベース奏法", BASS_STYLES[item.bassStyle]);
     chip("7th", item.sevenths ? "あり" : null);
+    chip("技法", (item.techniques || []).length ? techniqueLabels(item.techniques).join("・") : null);
   }
   chip("ドラム", (DRUM_KITS[item.drumKit] || {}).label);
   MELODIC_ROLES.forEach(r => { if (r !== "melody" || (item.events.melody || []).length) chip(PART_LABELS[r], instLabel((item.instruments || {})[r])); });
@@ -2405,6 +2951,35 @@ function renderNow(){
   if (rt.playing) updateTransportUI();
   syncMixerToItem();
   drawPattern();
+  renderLyricsView(item, null);
+}
+
+/* ---------- 歌詞のカラオケ表示 ---------- */
+let lyricsViewState = { item: null, line: -1, sung: -2 };
+function renderLyricsView(item, posSec){
+  const box = el("lyricsView");
+  const lines = item && item.lyricLines;
+  if (!lines || !lines.length){ box.hidden = true; lyricsViewState.item = null; return; }
+  box.hidden = false;
+  const step = posSec == null ? -1 : posSec / (60 / item.bpm / 4);
+  let li = 0;
+  for (let i = 0; i < lines.length; i++){ if (lines[i].start <= step) li = i; else break; }
+  const lineText = l => l.text || l.units.map(u => u.text).join("");
+  if (lyricsViewState.item !== item || lyricsViewState.line !== li){
+    lyricsViewState = { item, line: li, sung: -2 };
+    const L = lines[li], N = lines[li + 1];
+    box.replaceChildren(
+      h("div", { class: "lv-section" }, L.section),
+      h("div", { class: "lv-line" }, lineText(L)),
+      h("div", { class: "lv-reading" }, L.units.map(u => h("span", {}, u.text))),
+      N ? h("div", { class: "lv-next" }, "次：" + lineText(N)) : null);
+  }
+  let sung = -1;
+  lines[li].units.forEach((u, i) => { if (u.step <= step) sung = i; });
+  if (sung !== lyricsViewState.sung){
+    box.querySelectorAll(".lv-reading span").forEach((s, i) => s.classList.toggle("sung", i <= sung));
+    lyricsViewState.sung = sung;
+  }
 }
 
 function renderStars(current){
@@ -2679,6 +3254,7 @@ function buildFx(){
 /* ---------- 学習パネル ---------- */
 function featureValueLabel(feature, value){
   switch (feature){
+    case "mood": return moodLabel(value);
     case "genre": return genreLabel(value);
     case "bpmBand": return (state.rules.bpmBands.find(b => b.name === value) || {}).label || value;
     case "key": return value.replace("major", " メジャー").replace("minor", " マイナー");
@@ -2819,7 +3395,7 @@ function songLibItem(s){
 function openSong(song){
   const item = buildSongItem(song);
   if (!item){ toast("このソングで使うループが見つかりません（削除された可能性があります）"); return; }
-  state.songDraft = clone(song);
+  state.songDraft = normalizeSong(clone(song));
   state.view = { type: "song", item };
   renderSongBuilder();
   selectToolTab("song");
@@ -2926,6 +3502,22 @@ function buildGenControls(){
   const k = el("genKey");
   k.replaceChildren(option("auto", "おまかせ"), ...state.rules.keys.map(x => option(x.root + " " + x.mode, x.root + (x.mode === "minor" ? " マイナー" : " メジャー"))));
   k.value = state.rules.keys.some(x => x.root + " " + x.mode === state.gen.key) ? state.gen.key : "auto";
+  const m = el("genMood");
+  m.replaceChildren(option("auto", "おまかせ（学習した好みで選ぶ）"), ...moodsOf(state.rules).map(x => option(x.name, x.label)));
+  m.value = moodsOf(state.rules).some(x => x.name === state.gen.mood) ? state.gen.mood : "auto";
+  const t = el("genTempo");
+  t.replaceChildren(option("auto", "おまかせ"), ...state.rules.bpmBands.map(b => option(b.name, b.label + "（" + b.range[0] + "〜" + b.range[1] + " BPM）")));
+  t.value = state.rules.bpmBands.some(b => b.name === state.gen.tempo) ? state.gen.tempo : "auto";
+  const tech = el("genTechniques");
+  tech.replaceChildren(...Object.entries(TECHNIQUES).map(([key, def]) => {
+    const cb = h("input", { type: "checkbox", id: "tech_" + key, checked: state.gen.techniques[key] !== false });
+    cb.addEventListener("change", () => {
+      state.gen.techniques[key] = cb.checked;
+      persistGen();
+      if (state.view.type === "candidate") regenerateSamePhrase();
+    });
+    return h("label", { title: def.hint }, cb, def.label);
+  }));
   syncGenUI();
 }
 function syncGenUI(){
@@ -2958,6 +3550,17 @@ function loopOptions(selectedId, emptyLabel){
   bestLoops().forEach(l => opts.push(option(l.id, (l.rating ? "★" + l.rating + " " : "") + loopTitle(l) + "（" + l.bars + "小節）", l.id === selectedId)));
   return opts;
 }
+let draftTimer = 0;
+function touchDraft(){
+  clearTimeout(draftTimer);
+  draftTimer = setTimeout(() => saveJSON(KEYS.draft, state.songDraft), 300);
+}
+function lyricSections(d){
+  if (!d.lyrics) d.lyrics = { sections: [] };
+  if (!Array.isArray(d.lyrics.sections)) d.lyrics.sections = [];
+  while (d.lyrics.sections.length < d.sections.length) d.lyrics.sections.push(null);
+  return d.lyrics.sections;
+}
 function renderSongBuilder(){
   if (!state.songDraft) state.songDraft = newSongDraft();
   const d = state.songDraft;
@@ -2967,35 +3570,140 @@ function renderSongBuilder(){
   const tpl = el("songTemplate");
   if (!tpl.options.length) Object.entries(SONG_TEMPLATES).forEach(([k, v]) => tpl.append(option(k, v.label)));
   if (d.template) tpl.value = d.template;
+  const mod = el("songModPreset");
+  if (!mod.options.length) Object.entries(MOD_PRESETS).forEach(([k, v]) => mod.append(option(k, v.label)));
+  mod.value = MOD_PRESETS[d.modulation] ? d.modulation : "none";
+  el("songVocal").value = d.vocal || "instrument";
+  el("songBreak").checked = !!d.techniques.breakBeforeChorus;
+  el("songHalfTime").checked = !!d.techniques.halfTimePre;
   const tbody = el("songRows");
   tbody.replaceChildren();
   d.sections.forEach((s, i) => {
     const typeSel = h("select", { "aria-label": "セクション種別" }, Object.entries(SECTION_TYPES).map(([k, v]) => option(k, v.label, k === s.type)));
-    typeSel.addEventListener("change", () => { Object.assign(s, sectionFromType(typeSel.value, s.bars, s.loopId)); renderSongBuilder(); });
+    typeSel.addEventListener("change", () => { Object.assign(s, sectionFromType(typeSel.value, s.bars, s.loopId), { shift: s.shift || 0 }); renderSongBuilder(); });
     const bars = h("input", { type: "number", min: 1, max: 32, value: s.bars, "aria-label": "小節数" });
     bars.addEventListener("change", () => { s.bars = clamp(parseInt(bars.value, 10) || 1, 1, 32); renderSongBuilder(); });
+    const shiftSel = h("select", { "aria-label": "転調（半音）" }, SHIFT_OPTIONS.map(([v, l]) => option(String(v), l, (s.shift || 0) === v)));
+    shiftSel.addEventListener("change", () => { s.shift = parseInt(shiftSel.value, 10); d.modulation = "custom"; el("songModPreset").value = "custom"; touchDraft(); });
     const loopSel = h("select", { "aria-label": "使うループ" }, loopOptions(s.loopId, "ベースと同じ"));
-    loopSel.addEventListener("change", () => { s.loopId = loopSel.value; });
+    loopSel.addEventListener("change", () => { s.loopId = loopSel.value; renderSongBuilder(); });
     const drums = h("select", { "aria-label": "ドラム" }, [[0, "なし"], [1, "軽め"], [2, "フル"]].map(([v, l]) => option(String(v), l, s.drums === v)));
-    drums.addEventListener("change", () => { s.drums = parseInt(drums.value, 10); });
-    const cb = key => { const c = h("input", { type: "checkbox", checked: s[key], "aria-label": key }); c.addEventListener("change", () => { s[key] = c.checked; }); return c; };
-    const move = (dir) => { const j = i + dir; if (j < 0 || j >= d.sections.length) return; [d.sections[i], d.sections[j]] = [d.sections[j], d.sections[i]]; renderSongBuilder(); };
+    drums.addEventListener("change", () => { s.drums = parseInt(drums.value, 10); touchDraft(); });
+    const cb = key => {
+      const c = h("input", { type: "checkbox", checked: s[key], "aria-label": key });
+      c.addEventListener("change", () => { s[key] = c.checked; if (key === "melody") renderSongBuilder(); else touchDraft(); });
+      return c;
+    };
+    const move = dir => {
+      const j = i + dir;
+      if (j < 0 || j >= d.sections.length) return;
+      const ls = lyricSections(d);
+      [d.sections[i], d.sections[j]] = [d.sections[j], d.sections[i]];
+      [ls[i], ls[j]] = [ls[j], ls[i]];
+      renderSongBuilder();
+    };
+    const remove = () => { lyricSections(d).splice(i, 1); d.sections.splice(i, 1); renderSongBuilder(); };
     tbody.append(h("tr", {},
-      h("td", { class: "muted" }, String(i + 1)), h("td", {}, typeSel), h("td", {}, bars), h("td", {}, loopSel), h("td", {}, drums),
+      h("td", { class: "muted" }, String(i + 1)), h("td", {}, typeSel), h("td", {}, bars), h("td", {}, shiftSel), h("td", {}, loopSel), h("td", {}, drums),
       h("td", {}, cb("bass")), h("td", {}, cb("chord")), h("td", {}, cb("melody")),
       h("td", {}, h("div", { class: "row-actions" },
         h("button", { class: "btn small icon", title: "上へ", onclick: () => move(-1) }, "↑"),
         h("button", { class: "btn small icon", title: "下へ", onclick: () => move(1) }, "↓"),
-        h("button", { class: "btn small icon", title: "削除", onclick: () => { d.sections.splice(i, 1); renderSongBuilder(); } }, "✕")))));
+        h("button", { class: "btn small icon", title: "削除", onclick: remove }, "✕")))));
   });
   const totalBars = d.sections.reduce((a, s) => a + s.bars, 0);
   const baseLoop = findLoop(d.baseLoopId);
   el("songSummary").textContent = totalBars + "小節" + (baseLoop ? " · 約" + fmtTime(totalBars * 240 / baseLoop.bpm).replace(/\.\d$/, "") + "（" + baseLoop.bpm + " BPM）" : "");
-  el("songHint").textContent = state.savedLoops.length ? "テンポ・キー・音色はベースループに揃えられ、各セクションのループは自動で移調されます。セクションの切り替わりにはドラムのフィルが入ります。"
+  el("songHint").textContent = state.savedLoops.length ? "テンポ・キー・音色はベースループに揃えられ、各セクションのループは自動で移調されます。セクションの切り替わりにはドラムのフィル、転調の直前にはドミナントが入ります。"
     : "ソングを作るには、先にループを ★ で評価してライブラリに保存してください。";
+  renderLyricsEditor();
+  touchDraft();
 }
+
+function renderLyricsEditor(){
+  const d = state.songDraft;
+  const ls = d.lyricsSettings;
+  el("lyTheme").value = ls.theme || "";
+  el("lyKeywords").value = ls.keywords || "";
+  el("lyLang").value = ls.lang || "ja";
+  const box = el("lyricsEditor");
+  box.replaceChildren();
+  const t = findLoop(d.baseLoopId) || bestLoops().length ? lyricTargets(d) : null;
+  if (!t){ box.append(h("div", { class: "muted small" }, "ソングにループを割り当てると、ここで歌詞を入力・編集できます。")); return; }
+  if (!t.targets.length){ box.append(h("div", { class: "muted small" }, "メロディがオンのセクションがありません。セクション表の「メロディ」にチェックしてください。")); return; }
+  const secs = (d.lyrics && d.lyrics.sections) || [];
+  t.targets.forEach(tg => {
+    const secBox = h("div", { class: "ly-section" }, h("h4", {}, (tg.section_index + 1) + ". " + tg.label + "（" + tg.bars + "小節・" + tg.target_morae_per_line.length + "行）"));
+    tg.target_morae_per_line.forEach((n, j) => {
+      const line = ((secs[tg.section_index] || {}).lines || [])[j] || { text: "", reading: "" };
+      const text = h("input", { type: "text", value: line.text, placeholder: n ? "歌詞（" + n + "音くらい）" : "（メロディなし）", "aria-label": tg.label + " " + (j + 1) + "行目の歌詞" });
+      const reading = h("input", { type: "text", value: line.reading, placeholder: "よみ（ひらがな）", "aria-label": tg.label + " " + (j + 1) + "行目のよみ" });
+      const count = h("span", { class: "ly-count", title: "よみの音数 / メロディの音符数" });
+      const upd = () => {
+        const u = splitUnits(reading.value || text.value).length;
+        count.textContent = u + " / " + n + "音";
+        count.classList.toggle("warn", u > 0 && Math.abs(u - n) > Math.max(2, n * 0.3));
+      };
+      const save = () => {
+        const all = lyricSections(d);
+        if (!all[tg.section_index]) all[tg.section_index] = { lines: [] };
+        const lines = all[tg.section_index].lines;
+        while (lines.length <= j) lines.push({ text: "", reading: "" });
+        lines[j] = { text: text.value, reading: reading.value };
+        upd();
+        touchDraft();
+      };
+      text.addEventListener("input", save);
+      reading.addEventListener("input", save);
+      upd();
+      secBox.append(h("div", { class: "ly-line" }, text, reading, count));
+    });
+    box.append(secBox);
+  });
+}
+
+function refreshSongView(){
+  if (state.view.type !== "song") return;
+  const d = state.songDraft;
+  if (state.view.item.id !== (d.id || "song_draft")) return;
+  const item = buildSongItem(d);
+  if (!item) return;
+  if (d.meta) item.meta = d.meta;
+  state.view = { type: "song", item };
+  renderNow();
+  if (rt.playing) playLoop(item);
+}
+async function runAiLyrics(){
+  const d = state.songDraft;
+  const ls = d.lyricsSettings;
+  ls.theme = el("lyTheme").value.trim();
+  ls.keywords = el("lyKeywords").value.trim();
+  ls.lang = el("lyLang").value;
+  if (!ls.theme){ toast("歌詞のテーマを入力してください"); el("lyTheme").focus(); return; }
+  if (!state.settings.apiKey){ toast("AIで作詞するにはAPIキーが必要です（歌詞欄への手入力もできます）"); openSettings(); return; }
+  if (!findLoop(d.baseLoopId)) autoAssignSong(d);
+  if (!findLoop(d.baseLoopId)){ toast("先にループを保存して、ソングを組み立ててください"); return; }
+  el("lyGenerate").disabled = true;
+  el("lyricsStatus").textContent = "作詞中…（数十秒かかることがあります）";
+  try {
+    const ly = await generateLyrics(d, ls);
+    d.lyrics = ly;
+    if (!d.title && ly.title) d.title = ly.title;
+    renderSongBuilder();
+    el("lyricsStatus").textContent = ly.title ? "作詞しました：「" + ly.title + "」" : "作詞しました";
+    refreshSongView();
+    toast("歌詞を作成しました。「ソングを再生・表示」で歌詞の流れを確認できます");
+  } catch (e) {
+    el("lyricsStatus").textContent = e.message || String(e);
+  } finally {
+    el("lyGenerate").disabled = false;
+  }
+}
+
 function startSongFrom(loop){
+  const prev = state.songDraft;
   state.songDraft = newSongDraft("pop", loop.id);
+  if (prev) state.songDraft.lyricsSettings = prev.lyricsSettings;
   autoAssignSong(state.songDraft);
   renderSongBuilder();
   selectToolTab("song");
@@ -3024,6 +3732,7 @@ function saveSongDraft({ silent = false } = {}){
   const idx = state.songs.findIndex(s => s.id === d.id);
   if (idx >= 0) state.songs[idx] = copy; else state.songs.push(copy);
   persistSongs();
+  touchDraft();
   const item = buildSongItem(copy);
   if (item){ state.view = { type: "song", item }; renderNow(); }
   state.libTab = "songs";
@@ -3081,6 +3790,7 @@ async function runAutopilot(){
       const tplName = el("apTemplate").value || "pop";
       const draft = newSongDraft(tplName, chosen[0].id);
       autoAssignSong(draft);
+      if (draft.sections.filter(s => s.type === "chorus").length >= 2 && chance(0.6)) applyModPreset(draft, pickRandom(["lastUp1", "lastUp2"]));
       draft.id = newId("song"); draft.createdAt = new Date().toISOString(); draft.auto = true;
       draft.title = (chosen[0].meta && (chosen[0].meta.title_ja || chosen[0].meta.title)) || genreLabel(chosen[0].genre) + "のソング";
       if (withAI && !state.autopilotAbort){
@@ -3293,6 +4003,8 @@ function bindEvents(){
   // Generator
   el("genGenre").addEventListener("change", () => { state.gen.genre = el("genGenre").value; persistGen(); regenerateCandidate(); });
   el("genKey").addEventListener("change", () => { state.gen.key = el("genKey").value; persistGen(); regenerateCandidate(); });
+  el("genMood").addEventListener("change", () => { state.gen.mood = el("genMood").value; persistGen(); regenerateCandidate(); });
+  el("genTempo").addEventListener("change", () => { state.gen.tempo = el("genTempo").value; persistGen(); regenerateCandidate(); });
   document.querySelectorAll("#lenSeg button").forEach(b => b.addEventListener("click", () => {
     if (b.dataset.bars === "sec") state.gen.lengthMode = "seconds";
     else { state.gen.lengthMode = "bars"; state.gen.bars = parseInt(b.dataset.bars, 10); }
@@ -3360,7 +4072,7 @@ function bindEvents(){
   el("libExportZip").addEventListener("click", () => exportLoopsZip(bestLoops()));
 
   // Song builder
-  el("songTitle").addEventListener("input", () => { state.songDraft.title = el("songTitle").value; });
+  el("songTitle").addEventListener("input", () => { state.songDraft.title = el("songTitle").value; touchDraft(); });
   el("songBase").addEventListener("change", () => { state.songDraft.baseLoopId = el("songBase").value; renderSongBuilder(); });
   el("songApplyTemplate").addEventListener("click", () => {
     const d = state.songDraft;
@@ -3368,7 +4080,29 @@ function bindEvents(){
     d.template = t;
     d.sections = SONG_TEMPLATES[t].sections.map(([type, bars]) => sectionFromType(type, bars, ""));
     autoAssignSong(d);
+    if (d.modulation && d.modulation !== "custom") applyModPreset(d, d.modulation);
     renderSongBuilder();
+  });
+  el("songApplyMod").addEventListener("click", () => {
+    applyModPreset(state.songDraft, el("songModPreset").value);
+    renderSongBuilder();
+    toast("転調を設定しました：" + MOD_PRESETS[state.songDraft.modulation].label);
+  });
+  el("songVocal").addEventListener("change", () => { state.songDraft.vocal = el("songVocal").value; touchDraft(); });
+  el("songBreak").addEventListener("change", () => { state.songDraft.techniques.breakBeforeChorus = el("songBreak").checked; renderSongBuilder(); });
+  el("songHalfTime").addEventListener("change", () => { state.songDraft.techniques.halfTimePre = el("songHalfTime").checked; renderSongBuilder(); });
+  ["lyTheme", "lyKeywords", "lyLang"].forEach(id => el(id).addEventListener(id === "lyLang" ? "change" : "input", () => {
+    const ls = state.songDraft.lyricsSettings;
+    ls.theme = el("lyTheme").value; ls.keywords = el("lyKeywords").value; ls.lang = el("lyLang").value;
+    touchDraft();
+  }));
+  el("lyGenerate").addEventListener("click", runAiLyrics);
+  el("lyClear").addEventListener("click", () => {
+    if (!state.songDraft.lyrics || !confirm("このソングの歌詞をすべて消しますか？")) return;
+    state.songDraft.lyrics = null;
+    renderSongBuilder();
+    refreshSongView();
+    el("lyricsStatus").textContent = "";
   });
   el("songAddSection").addEventListener("click", () => { state.songDraft.sections.push(sectionFromType("verse", 8, "")); renderSongBuilder(); });
   el("songAutoAssign").addEventListener("click", () => {
@@ -3379,7 +4113,14 @@ function bindEvents(){
   });
   el("songPlay").addEventListener("click", playSongDraft);
   el("songSave").addEventListener("click", () => saveSongDraft());
-  el("songNew").addEventListener("click", () => { state.songDraft = newSongDraft(el("songTemplate").value || "pop"); autoAssignSong(state.songDraft); renderSongBuilder(); });
+  el("songNew").addEventListener("click", () => {
+    const prev = state.songDraft;
+    state.songDraft = newSongDraft(el("songTemplate").value || "pop");
+    if (prev) state.songDraft.lyricsSettings = prev.lyricsSettings;
+    autoAssignSong(state.songDraft);
+    renderSongBuilder();
+    el("lyricsStatus").textContent = "";
+  });
 
   // Autopilot / AI
   el("apRun").addEventListener("click", runAutopilot);
@@ -3452,8 +4193,11 @@ function init(){
   state.candidate = generateLoop();
   if (state.gen.abMode) state.challenger = generateLoop();
   syncMixUI();
-  state.songDraft = newSongDraft();
-  autoAssignSong(state.songDraft);
+  state.songDraft = normalizeSong(loadJSON(KEYS.draft, null));
+  if (!state.songDraft){
+    state.songDraft = newSongDraft();
+    autoAssignSong(state.songDraft);
+  }
   renderSongBuilder();
   renderNow();
   renderLibrary();
