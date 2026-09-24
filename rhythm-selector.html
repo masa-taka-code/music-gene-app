@@ -1,0 +1,951 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>リズム選別ツール</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+<style>
+  :root{
+    --bg:#12151A;
+    --panel:#1B1F25;
+    --panel-alt:#20252C;
+    --border:#2A3038;
+    --text:#EDEFF2;
+    --text-dim:#8B93A0;
+    --amber:#E8A33D;
+    --green:#5FD08A;
+    --red:#E5615F;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Hiragino Kaku Gothic ProN", "Segoe UI", sans-serif;
+  }
+  *{box-sizing:border-box;}
+  *:focus-visible{outline:2px solid var(--amber);outline-offset:2px;}
+  html,body{background:var(--bg);}
+  body{
+    margin:0;
+    color:var(--text);
+    font-family:var(--sans);
+    padding:max(18px, env(safe-area-inset-top)) 16px calc(32px + env(safe-area-inset-bottom));
+    -webkit-tap-highlight-color:transparent;
+  }
+  .app{max-width:480px;margin:0 auto;display:flex;flex-direction:column;gap:20px;}
+  .app-header h1{font-size:1.25rem;font-weight:700;letter-spacing:0.01em;margin:0 0 2px;}
+  .app-header p{margin:0;font-size:0.8rem;color:var(--text-dim);}
+
+  .deck{background:var(--panel);border:1px solid var(--border);border-radius:16px;padding:20px;display:flex;flex-direction:column;gap:18px;}
+
+  .readouts{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  .readout{background:var(--panel-alt);border-radius:10px;padding:10px 12px;}
+  .readout .label{font-size:0.68rem;color:var(--text-dim);}
+  .readout .value{font-family:var(--mono);font-size:1.05rem;color:var(--amber);margin-top:3px;word-break:break-word;}
+
+  .step-grid{display:flex;flex-direction:column;gap:6px;}
+  .step-row{display:flex;gap:4px;}
+  .step-dot{flex:1;height:8px;border-radius:2px;background:var(--panel-alt);border:1px solid var(--border);transition:background 60ms linear, box-shadow 60ms linear;}
+  .step-dot.active{background:var(--green);box-shadow:0 0 6px var(--green);border-color:var(--green);}
+
+  .transport{display:flex;align-items:center;gap:16px;}
+  .play-btn{width:60px;height:60px;flex:none;border-radius:50%;border:none;background:var(--amber);color:#1A1206;font-size:1.3rem;display:flex;align-items:center;justify-content:center;cursor:pointer;}
+  .play-btn:active{transform:scale(0.95);}
+  .transport-hint{font-size:0.78rem;color:var(--text-dim);}
+
+  .feedback-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+  .fb-btn{padding:16px 10px;border-radius:12px;border:1px solid var(--border);font-size:0.95rem;font-weight:600;display:flex;align-items:center;justify-content:center;gap:8px;cursor:pointer;background:var(--panel-alt);color:var(--text);}
+  .fb-btn:active{transform:scale(0.97);}
+  .fb-btn.positive{border-color:var(--green);color:var(--green);}
+  .fb-btn.negative{border-color:var(--red);color:var(--red);}
+
+  .mini-toolbar{display:flex;gap:10px;}
+  .btn{padding:9px 12px;border-radius:9px;border:1px solid var(--border);background:var(--panel-alt);color:var(--text);font-size:0.78rem;cursor:pointer;}
+  .btn:active{transform:scale(0.97);}
+
+  .section-title{font-size:0.85rem;color:var(--text-dim);margin:0;display:flex;align-items:center;justify-content:space-between;gap:8px;}
+
+  .saved-list{display:flex;flex-direction:column;gap:10px;}
+  .saved-card{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:12px 12px;display:flex;align-items:center;gap:10px;}
+  .saved-info{flex:1;min-width:0;}
+  .saved-info .meta{font-family:var(--mono);font-size:0.82rem;color:var(--text);}
+  .saved-info .sub{font-size:0.7rem;color:var(--text-dim);margin-top:2px;}
+  .card-actions{display:flex;gap:6px;flex:none;}
+  .icon-btn{width:36px;height:36px;border-radius:9px;border:1px solid var(--border);background:var(--panel-alt);color:var(--text);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:0.9rem;flex:none;}
+  .icon-btn:active{transform:scale(0.95);}
+
+  .empty-state{color:var(--text-dim);font-size:0.82rem;padding:18px;text-align:center;border:1px dashed var(--border);border-radius:12px;}
+
+  details.settings{border:1px solid var(--border);border-radius:12px;padding:10px 14px;background:var(--panel);}
+  details.settings summary{cursor:pointer;color:var(--text-dim);font-size:0.82rem;}
+  .settings-body{display:flex;flex-direction:column;gap:10px;margin-top:12px;}
+  .settings-row{display:flex;gap:8px;flex-wrap:wrap;}
+
+  .status-line{font-size:0.76rem;color:var(--text-dim);min-height:1.2em;}
+
+  .mixer{display:flex;flex-direction:column;gap:10px;}
+  .channel-strip{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:12px 14px;display:flex;flex-direction:column;gap:8px;}
+  .channel-head{display:flex;align-items:center;gap:8px;}
+  .channel-dot{width:9px;height:9px;border-radius:50%;background:var(--panel-alt);border:1px solid var(--border);flex:none;transition:background 80ms linear, box-shadow 80ms linear;}
+  .channel-dot.active{background:var(--green);box-shadow:0 0 6px var(--green);border-color:var(--green);}
+  .channel-name{font-weight:600;font-size:0.9rem;}
+  .channel-sub{font-size:0.68rem;color:var(--text-dim);}
+  .channel-mute{margin-left:auto;display:flex;align-items:center;gap:5px;font-size:0.72rem;color:var(--text-dim);}
+  .channel-mute input{accent-color:var(--red);}
+  .ctrl-row{display:grid;grid-template-columns:64px 1fr 46px;align-items:center;gap:8px;}
+  .ctrl-row.wave-row{grid-template-columns:64px 1fr;}
+  .ctrl-label{font-size:0.72rem;color:var(--text-dim);}
+  .ctrl-row input[type="range"]{width:100%;accent-color:var(--amber);}
+  .ctrl-row select{background:var(--panel-alt);color:var(--text);border:1px solid var(--border);border-radius:7px;padding:6px 8px;font-size:0.8rem;}
+  .ctrl-val{font-family:var(--mono);font-size:0.72rem;color:var(--text-dim);text-align:right;}
+
+  footer{text-align:center;font-size:0.7rem;color:var(--text-dim);margin-top:4px;}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <div class="app-header">
+    <h1>リズム選別ツール</h1>
+    <p>2小節のループをランダム生成 → 聴いて 👍保存 / 👎再生成</p>
+  </div>
+
+  <div class="deck">
+    <div class="readouts">
+      <div class="readout"><div class="label">BPM</div><div class="value" id="rBpm">--</div></div>
+      <div class="readout"><div class="label">キー</div><div class="value" id="rKey">--</div></div>
+      <div class="readout"><div class="label">コード進行</div><div class="value" id="rProg">--</div></div>
+      <div class="readout"><div class="label">リズム密度</div><div class="value" id="rDensity">--</div></div>
+    </div>
+
+    <div class="step-grid" id="stepGrid"></div>
+
+    <div class="transport">
+      <button class="play-btn" id="playBtn" aria-label="再生">▶</button>
+      <div class="transport-hint" id="transportHint">タップして再生</div>
+    </div>
+
+    <div class="feedback-row">
+      <button class="fb-btn positive" id="btnGood">👍 保存</button>
+      <button class="fb-btn negative" id="btnBad">👎 再生成</button>
+    </div>
+
+    <div class="mini-toolbar">
+      <button class="btn" id="exportCurrentJson">現在のループをJSON書き出し</button>
+      <button class="btn" id="exportCurrentMidi">現在のループをMIDI書き出し</button>
+    </div>
+  </div>
+
+  <div class="section-title"><span>楽器（再生中の音がここで光ります）</span></div>
+  <div class="mixer">
+    <div class="channel-strip" data-part="kick">
+      <div class="channel-head">
+        <span class="channel-dot"></span>
+        <span class="channel-name">キック</span>
+        <span class="channel-sub">MembraneSynth</span>
+        <label class="channel-mute"><input type="checkbox" class="mute-toggle">ミュート</label>
+      </div>
+      <div class="ctrl-row">
+        <span class="ctrl-label">音量</span>
+        <input type="range" class="vol-slider" min="-30" max="0" step="1" value="-4">
+        <span class="ctrl-val vol-val">-4dB</span>
+      </div>
+      <div class="ctrl-row">
+        <span class="ctrl-label">余韻</span>
+        <input type="range" class="decay-slider" min="0.10" max="0.60" step="0.01" value="0.35">
+        <span class="ctrl-val decay-val">0.35s</span>
+      </div>
+    </div>
+
+    <div class="channel-strip" data-part="snare">
+      <div class="channel-head">
+        <span class="channel-dot"></span>
+        <span class="channel-name">スネア</span>
+        <span class="channel-sub">NoiseSynth</span>
+        <label class="channel-mute"><input type="checkbox" class="mute-toggle">ミュート</label>
+      </div>
+      <div class="ctrl-row">
+        <span class="ctrl-label">音量</span>
+        <input type="range" class="vol-slider" min="-30" max="0" step="1" value="-10">
+        <span class="ctrl-val vol-val">-10dB</span>
+      </div>
+      <div class="ctrl-row">
+        <span class="ctrl-label">余韻</span>
+        <input type="range" class="decay-slider" min="0.05" max="0.40" step="0.01" value="0.18">
+        <span class="ctrl-val decay-val">0.18s</span>
+      </div>
+    </div>
+
+    <div class="channel-strip" data-part="hihat">
+      <div class="channel-head">
+        <span class="channel-dot"></span>
+        <span class="channel-name">ハイハット</span>
+        <span class="channel-sub">MetalSynth</span>
+        <label class="channel-mute"><input type="checkbox" class="mute-toggle">ミュート</label>
+      </div>
+      <div class="ctrl-row">
+        <span class="ctrl-label">音量</span>
+        <input type="range" class="vol-slider" min="-30" max="0" step="1" value="-20">
+        <span class="ctrl-val vol-val">-20dB</span>
+      </div>
+      <div class="ctrl-row">
+        <span class="ctrl-label">余韻</span>
+        <input type="range" class="decay-slider" min="0.02" max="0.20" step="0.01" value="0.06">
+        <span class="ctrl-val decay-val">0.06s</span>
+      </div>
+    </div>
+
+    <div class="channel-strip" data-part="bass">
+      <div class="channel-head">
+        <span class="channel-dot"></span>
+        <span class="channel-name">ベース</span>
+        <span class="channel-sub">MonoSynth</span>
+        <label class="channel-mute"><input type="checkbox" class="mute-toggle">ミュート</label>
+      </div>
+      <div class="ctrl-row">
+        <span class="ctrl-label">音量</span>
+        <input type="range" class="vol-slider" min="-30" max="0" step="1" value="-8">
+        <span class="ctrl-val vol-val">-8dB</span>
+      </div>
+      <div class="ctrl-row wave-row">
+        <span class="ctrl-label">波形</span>
+        <select class="wave-select">
+          <option value="sine">sine</option>
+          <option value="triangle" selected>triangle</option>
+          <option value="square">square</option>
+          <option value="sawtooth">sawtooth</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="channel-strip" data-part="chord">
+      <div class="channel-head">
+        <span class="channel-dot"></span>
+        <span class="channel-name">コード</span>
+        <span class="channel-sub">PolySynth</span>
+        <label class="channel-mute"><input type="checkbox" class="mute-toggle">ミュート</label>
+      </div>
+      <div class="ctrl-row">
+        <span class="ctrl-label">音量</span>
+        <input type="range" class="vol-slider" min="-30" max="0" step="1" value="-14">
+        <span class="ctrl-val vol-val">-14dB</span>
+      </div>
+      <div class="ctrl-row wave-row">
+        <span class="ctrl-label">波形</span>
+        <select class="wave-select">
+          <option value="sine" selected>sine</option>
+          <option value="triangle">triangle</option>
+          <option value="square">square</option>
+          <option value="sawtooth">sawtooth</option>
+        </select>
+      </div>
+      <div class="ctrl-row">
+        <span class="ctrl-label">余韻</span>
+        <input type="range" class="release-slider" min="0.20" max="1.50" step="0.05" value="0.60">
+        <span class="ctrl-val release-val">0.60s</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="section-title">
+    <span>保存したループ（<span id="savedCount">0</span>）</span>
+    <button class="btn" id="exportAllJson">全件JSON書き出し</button>
+  </div>
+  <div class="saved-list" id="savedList"></div>
+
+  <details class="settings">
+    <summary>設定・ルールJSON</summary>
+    <div class="settings-body">
+      <div class="settings-row">
+        <button class="btn" id="loadRulesBtn">ルールJSONを読み込む</button>
+        <button class="btn" id="resetRulesBtn">既定のルールに戻す</button>
+        <button class="btn" id="resetWeightsBtn">好みの学習をリセット</button>
+        <button class="btn" id="resetMixBtn">音色を既定に戻す</button>
+        <button class="btn" id="clearSavedBtn">保存ループを全削除</button>
+      </div>
+      <input type="file" id="rulesFileInput" accept="application/json,.json" hidden>
+      <div class="status-line" id="statusLine"></div>
+    </div>
+  </details>
+
+  <footer>Tone.js で音を生成・再生します。保存データはこの端末のブラウザ内に保存されます。</footer>
+</div>
+
+<script>
+/* =========================================================================
+   1. ルールJSON（ここを丸ごと差し替えれば生成内容を変更できます）
+   ========================================================================= */
+const DEFAULT_RULES = {
+  bpmBands: [
+    { name: "slow", label: "スロー",   range: [80, 100] },
+    { name: "mid",  label: "ミドル",   range: [101, 120] },
+    { name: "fast", label: "ファスト", range: [121, 140] }
+  ],
+  keys: [
+    { root: "C", mode: "major" }, { root: "G", mode: "major" },
+    { root: "D", mode: "major" }, { root: "F", mode: "major" },
+    { root: "A", mode: "major" },
+    { root: "A", mode: "minor" }, { root: "E", mode: "minor" },
+    { root: "D", mode: "minor" }, { root: "C", mode: "minor" },
+    { root: "G", mode: "minor" }
+  ],
+  chordProgressions: [
+    { name: "I-V",   degrees: ["I", "V"] },
+    { name: "I-vi",  degrees: ["I", "vi"] },
+    { name: "vi-IV", degrees: ["vi", "IV"] },
+    { name: "IV-V",  degrees: ["IV", "V"] },
+    { name: "ii-V",  degrees: ["ii", "V"] },
+    { name: "I-IV",  degrees: ["I", "IV"] },
+    { name: "vi-V",  degrees: ["vi", "V"] },
+    { name: "I-iii", degrees: ["I", "iii"] }
+  ],
+  rhythmDensities: [
+    { name: "low",  label: "低", pattern: { kick: [0, 8],            snare: [4, 12],     hihat: [0, 4, 8, 12] } },
+    { name: "mid",  label: "中", pattern: { kick: [0, 6, 8, 14],     snare: [4, 12],     hihat: [0, 2, 4, 6, 8, 10, 12, 14] } },
+    { name: "high", label: "高", pattern: { kick: [0, 3, 6, 8, 10, 14], snare: [4, 10, 12], hihat: [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15] } }
+  ],
+  barsPerLoop: 2,
+  stepsPerBar: 16
+};
+
+/* =========================================================================
+   2. 状態管理
+   ========================================================================= */
+const WEIGHTS_KEY = "rhythmTool_weights_v1";
+const SAVED_KEY = "rhythmTool_savedLoops_v1";
+const MIX_KEY = "rhythmTool_mix_v1";
+const RANDOM_RATE = 0.2; // 常に一定割合を完全ランダムにする
+
+// 各楽器の初期音色（音量dB・余韻の長さ・波形・ミュート）。ミキサーUIから微調整できます。
+const DEFAULT_MIX = {
+  kick:  { volume: -4,  decay: 0.35, mute: false },
+  snare: { volume: -10, decay: 0.18, mute: false },
+  hihat: { volume: -20, decay: 0.06, mute: false },
+  bass:  { volume: -8,  wave: "triangle", mute: false },
+  chord: { volume: -14, wave: "sine", release: 0.6, mute: false }
+};
+
+const state = {
+  rules: DEFAULT_RULES,
+  weights: loadWeights(),
+  savedLoops: loadSavedLoops(),
+  mix: loadMix(),
+  currentLoop: null
+};
+
+/* =========================================================================
+   3. 音楽理論ユーティリティ
+   ========================================================================= */
+const NOTE_NAMES = ["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
+const SCALES = { major: [0,2,4,5,7,9,11], minor: [0,2,3,5,7,8,10] };
+const DEGREE_INDEX = { I:0, ii:1, iii:2, IV:3, V:4, vi:5, vii:6 };
+
+function pitchClassToMidi(pc, octave){ return pc + (octave + 1) * 12; }
+
+function getScalePitchClasses(rootPc, mode){
+  const intervals = SCALES[mode] || SCALES.major;
+  return intervals.map(iv => (rootPc + iv) % 12);
+}
+
+function getTriadPitchClasses(scalePcs, degreeIndex){
+  const i1 = degreeIndex % 7;
+  const i2 = (degreeIndex + 2) % 7;
+  const i3 = (degreeIndex + 4) % 7;
+  return [scalePcs[i1], scalePcs[i2], scalePcs[i3]];
+}
+
+function triadToMidiNotes(triadPcs, baseOctave){
+  const notes = [pitchClassToMidi(triadPcs[0], baseOctave)];
+  for (let i = 1; i < triadPcs.length; i++){
+    let m = pitchClassToMidi(triadPcs[i], baseOctave);
+    while (m <= notes[i-1]) m += 12;
+    notes.push(m);
+  }
+  return notes;
+}
+
+function midiToNoteName(m){ return Tone.Frequency(m, "midi").toNote(); }
+
+/* =========================================================================
+   4. 生成ロジック
+   ========================================================================= */
+function randInt(min, max){ return Math.floor(Math.random() * (max - min + 1)) + min; }
+
+function weightedPick(items, weightMap, forceRandom, keyFn){
+  if (forceRandom || !weightMap) return items[randInt(0, items.length - 1)];
+  const weights = items.map(it => weightMap[keyFn(it)] ?? 1);
+  const total = weights.reduce((a,b) => a+b, 0);
+  if (total <= 0) return items[randInt(0, items.length - 1)];
+  let r = Math.random() * total;
+  for (let i = 0; i < items.length; i++){
+    r -= weights[i];
+    if (r <= 0) return items[i];
+  }
+  return items[items.length - 1];
+}
+
+function generateLoop(rules, weights){
+  const forceRandom = Math.random() < RANDOM_RATE;
+
+  const bpmBand = weightedPick(rules.bpmBands, weights.bpmBand, forceRandom, b => b.name);
+  const bpm = randInt(bpmBand.range[0], bpmBand.range[1]);
+  const keyObj = weightedPick(rules.keys, weights.key, forceRandom, k => k.root + k.mode);
+  const prog = weightedPick(rules.chordProgressions, weights.progression, forceRandom, p => p.name);
+  const density = weightedPick(rules.rhythmDensities, weights.density, forceRandom, d => d.name);
+
+  const scalePcs = getScalePitchClasses(NOTE_NAMES.indexOf(keyObj.root), keyObj.mode);
+  const bars = rules.barsPerLoop;
+  const stepsPerBar = rules.stepsPerBar;
+
+  const chordEvents = [], bassEvents = [], drumEvents = [];
+
+  for (let bar = 0; bar < bars; bar++){
+    const degreeName = prog.degrees[bar % prog.degrees.length];
+    const degreeIdx = DEGREE_INDEX[degreeName] ?? 0;
+    const triadPcs = getTriadPitchClasses(scalePcs, degreeIdx);
+    const chordMidi = triadToMidiNotes(triadPcs, 4);
+    const bassMidi = pitchClassToMidi(triadPcs[0], 2);
+
+    chordEvents.push({ step: bar * stepsPerBar, durationSteps: stepsPerBar, notes: chordMidi });
+
+    ["kick","snare","hihat"].forEach(part => {
+      (density.pattern[part] || []).forEach(s => {
+        drumEvents.push({ step: bar * stepsPerBar + s, part });
+      });
+    });
+
+    const kickSteps = (density.pattern.kick || []).slice().sort((a,b) => a-b);
+    kickSteps.forEach((s, idx) => {
+      const nextLocal = idx + 1 < kickSteps.length ? kickSteps[idx+1] : stepsPerBar;
+      const dur = Math.max(1, nextLocal - s);
+      bassEvents.push({ step: bar * stepsPerBar + s, durationSteps: dur, note: bassMidi });
+    });
+  }
+
+  return {
+    id: "loop_" + Date.now() + "_" + Math.floor(Math.random() * 1000),
+    createdAt: new Date().toISOString(),
+    bpm, bpmBandName: bpmBand.name,
+    key: keyObj.root, mode: keyObj.mode,
+    progressionName: prog.name, progressionDegrees: prog.degrees,
+    densityName: density.name,
+    barsPerLoop: bars, stepsPerBar,
+    events: { chord: chordEvents, bass: bassEvents, drum: drumEvents }
+  };
+}
+
+/* =========================================================================
+   5. 好みの学習（重み更新）
+   ========================================================================= */
+function defaultWeights(){ return { bpmBand:{}, key:{}, progression:{}, density:{} }; }
+
+function loadWeights(){
+  try {
+    const raw = localStorage.getItem(WEIGHTS_KEY);
+    return raw ? JSON.parse(raw) : defaultWeights();
+  } catch (e) { return defaultWeights(); }
+}
+
+function saveWeights(w){
+  try { localStorage.setItem(WEIGHTS_KEY, JSON.stringify(w)); } catch (e) {}
+}
+
+function bumpWeight(map, key, factor){
+  const cur = map[key] ?? 1;
+  map[key] = Math.min(6, Math.max(0.15, cur * factor));
+}
+
+function updateWeights(loop, positive){
+  const w = state.weights;
+  const factor = positive ? 1.3 : 0.75;
+  bumpWeight(w.bpmBand, loop.bpmBandName, factor);
+  bumpWeight(w.key, loop.key + loop.mode, factor);
+  bumpWeight(w.progression, loop.progressionName, factor);
+  bumpWeight(w.density, loop.densityName, factor);
+  saveWeights(w);
+}
+
+/* =========================================================================
+   6. 楽器ミキサー（音色の微調整・永続化）
+   ========================================================================= */
+function loadMix(){
+  try {
+    const raw = localStorage.getItem(MIX_KEY);
+    const parsed = raw ? JSON.parse(raw) : null;
+    if (!parsed) return JSON.parse(JSON.stringify(DEFAULT_MIX));
+    // 保存済みの値に既定値をマージ（新しいパラメータが増えても壊れないように）
+    const merged = {};
+    Object.keys(DEFAULT_MIX).forEach(part => { merged[part] = { ...DEFAULT_MIX[part], ...(parsed[part] || {}) }; });
+    return merged;
+  } catch (e) { return JSON.parse(JSON.stringify(DEFAULT_MIX)); }
+}
+
+function saveMix(){
+  try { localStorage.setItem(MIX_KEY, JSON.stringify(state.mix)); } catch (e) {}
+}
+
+function applyMixToSynths(){
+  if (!synths) return;
+  synths.kick.set({ envelope: { decay: state.mix.kick.decay } });
+  synths.kick.volume.value = state.mix.kick.volume;
+  synths.snare.set({ envelope: { decay: state.mix.snare.decay } });
+  synths.snare.volume.value = state.mix.snare.volume;
+  synths.hihat.set({ envelope: { decay: state.mix.hihat.decay } });
+  synths.hihat.volume.value = state.mix.hihat.volume;
+  synths.bass.set({ oscillator: { type: state.mix.bass.wave } });
+  synths.bass.volume.value = state.mix.bass.volume;
+  synths.chord.set({ oscillator: { type: state.mix.chord.wave }, envelope: { release: state.mix.chord.release } });
+  synths.chord.volume.value = state.mix.chord.volume;
+}
+
+/* =========================================================================
+   7. 再生（Tone.js）
+   ========================================================================= */
+let synths = null;
+let activeParts = [];
+let isPlaying = false;
+
+function initSynths(){
+  synths = {
+    kick: new Tone.MembraneSynth({ pitchDecay: 0.02, octaves: 6, envelope: { attack: 0.001, decay: state.mix.kick.decay, sustain: 0 } }).toDestination(),
+    snare: new Tone.NoiseSynth({ noise: { type: "white" }, envelope: { attack: 0.001, decay: state.mix.snare.decay, sustain: 0 } }).toDestination(),
+    hihat: new Tone.MetalSynth({ envelope: { attack: 0.001, decay: state.mix.hihat.decay, release: 0.01 }, harmonicity: 5.1, modulationIndex: 32, resonance: 4000, octaves: 1.2 }).toDestination(),
+    bass: new Tone.MonoSynth({ oscillator: { type: state.mix.bass.wave }, envelope: { attack: 0.01, decay: 0.2, sustain: 0.4, release: 0.2 } }).toDestination(),
+    chord: new Tone.PolySynth(Tone.Synth, { oscillator: { type: state.mix.chord.wave }, envelope: { attack: 0.02, decay: 0.3, sustain: 0.5, release: state.mix.chord.release } }).toDestination()
+  };
+  synths.kick.volume.value = state.mix.kick.volume;
+  synths.snare.volume.value = state.mix.snare.volume;
+  synths.hihat.volume.value = state.mix.hihat.volume;
+  synths.bass.volume.value = state.mix.bass.volume;
+  synths.chord.volume.value = state.mix.chord.volume;
+}
+
+async function ensureAudio(){
+  if (Tone.context.state !== "running") await Tone.start();
+}
+
+function stopPlayback(){
+  activeParts.forEach(p => { p.stop(0); p.dispose(); });
+  activeParts = [];
+  Tone.Transport.stop();
+  Tone.Transport.cancel();
+  isPlaying = false;
+  clearStepIndicator();
+  updatePlayButton();
+}
+
+async function playLoop(loop){
+  await ensureAudio();
+  stopPlayback();
+  if (!synths) initSynths();
+
+  const stepSec = 60 / loop.bpm / 4;
+  const totalSteps = loop.barsPerLoop * loop.stepsPerBar;
+  const loopDurSec = stepSec * totalSteps;
+
+  const drumPart = new Tone.Part((time, ev) => {
+    const m = state.mix[ev.part];
+    if (!m || m.mute) return;
+    if (ev.part === "kick") synths.kick.triggerAttackRelease("C1", "8n", time);
+    else if (ev.part === "snare") synths.snare.triggerAttackRelease("16n", time);
+    else if (ev.part === "hihat") synths.hihat.triggerAttackRelease("C6", "32n", time);
+    Tone.Draw.schedule(() => flashChannel(ev.part), time);
+  }, loop.events.drum.map(e => ({ time: e.step * stepSec, part: e.part })));
+  drumPart.loop = true; drumPart.loopEnd = loopDurSec; drumPart.start(0);
+
+  const bassPart = new Tone.Part((time, ev) => {
+    if (state.mix.bass.mute) return;
+    synths.bass.triggerAttackRelease(midiToNoteName(ev.note), ev.dur, time);
+    Tone.Draw.schedule(() => flashChannel("bass"), time);
+  }, loop.events.bass.map(e => ({ time: e.step * stepSec, dur: e.durationSteps * stepSec, note: e.note })));
+  bassPart.loop = true; bassPart.loopEnd = loopDurSec; bassPart.start(0);
+
+  const chordPart = new Tone.Part((time, ev) => {
+    if (state.mix.chord.mute) return;
+    synths.chord.triggerAttackRelease(ev.notes.map(midiToNoteName), ev.dur, time);
+    Tone.Draw.schedule(() => flashChannel("chord"), time);
+  }, loop.events.chord.map(e => ({ time: e.step * stepSec, dur: e.durationSteps * stepSec, notes: e.notes })));
+  chordPart.loop = true; chordPart.loopEnd = loopDurSec; chordPart.start(0);
+
+  const uiEvents = [];
+  for (let s = 0; s < totalSteps; s++) uiEvents.push({ time: s * stepSec, step: s });
+  const uiPart = new Tone.Part((time, ev) => {
+    Tone.Draw.schedule(() => highlightStep(ev.step), time);
+  }, uiEvents);
+  uiPart.loop = true; uiPart.loopEnd = loopDurSec; uiPart.start(0);
+
+  activeParts = [drumPart, bassPart, chordPart, uiPart];
+  Tone.Transport.start();
+  isPlaying = true;
+  updatePlayButton();
+}
+
+/* =========================================================================
+   8. 保存・永続化
+   ========================================================================= */
+function loadSavedLoops(){
+  try {
+    const raw = localStorage.getItem(SAVED_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch (e) { return []; }
+}
+
+function persistSavedLoops(){
+  try { localStorage.setItem(SAVED_KEY, JSON.stringify(state.savedLoops)); } catch (e) {}
+}
+
+function saveLoopToLibrary(loop){
+  state.savedLoops.push(loop);
+  persistSavedLoops();
+  renderSavedList();
+}
+
+function deleteSavedLoop(id){
+  state.savedLoops = state.savedLoops.filter(l => l.id !== id);
+  persistSavedLoops();
+  renderSavedList();
+}
+
+/* =========================================================================
+   9. エクスポート（JSON / MIDI）
+   ========================================================================= */
+function downloadBlob(filename, blob){
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
+
+function exportLoopJSON(loop){
+  downloadBlob(loop.id + ".json", new Blob([JSON.stringify(loop, null, 2)], { type: "application/json" }));
+}
+
+function exportAllLoopsJSON(){
+  downloadBlob("saved_loops_" + Date.now() + ".json", new Blob([JSON.stringify(state.savedLoops, null, 2)], { type: "application/json" }));
+}
+
+function pushVarLen(arr, value){
+  let buffer = value & 0x7F;
+  while ((value >>= 7) > 0){
+    buffer <<= 8;
+    buffer |= ((value & 0x7F) | 0x80);
+  }
+  while (true){
+    arr.push(buffer & 0xFF);
+    if (buffer & 0x80) buffer >>= 8; else break;
+  }
+}
+
+function buildMidiBytes(loop){
+  const ticksPerStep = 120;
+  const ticksPerQuarter = ticksPerStep * 4; // 480
+  const CH_DRUM = 9, CH_BASS = 0, CH_CHORD = 1;
+  const DRUM_PITCH = { kick: 36, snare: 38, hihat: 42 };
+
+  const rawEvents = [];
+  loop.events.drum.forEach(e => {
+    const t0 = e.step * ticksPerStep;
+    const dur = e.part === "hihat" ? Math.round(ticksPerStep * 0.5) : Math.round(ticksPerStep * 0.9);
+    rawEvents.push({ tick: t0, type: "on", channel: CH_DRUM, pitch: DRUM_PITCH[e.part], velocity: 100 });
+    rawEvents.push({ tick: t0 + dur, type: "off", channel: CH_DRUM, pitch: DRUM_PITCH[e.part], velocity: 0 });
+  });
+  loop.events.bass.forEach(e => {
+    const t0 = e.step * ticksPerStep;
+    const dur = Math.max(1, e.durationSteps * ticksPerStep - 10);
+    rawEvents.push({ tick: t0, type: "on", channel: CH_BASS, pitch: e.note, velocity: 100 });
+    rawEvents.push({ tick: t0 + dur, type: "off", channel: CH_BASS, pitch: e.note, velocity: 0 });
+  });
+  loop.events.chord.forEach(e => {
+    const t0 = e.step * ticksPerStep;
+    const dur = Math.max(1, e.durationSteps * ticksPerStep - 10);
+    e.notes.forEach(n => {
+      rawEvents.push({ tick: t0, type: "on", channel: CH_CHORD, pitch: n, velocity: 80 });
+      rawEvents.push({ tick: t0 + dur, type: "off", channel: CH_CHORD, pitch: n, velocity: 0 });
+    });
+  });
+  rawEvents.sort((a, b) => a.tick - b.tick || (a.type === "off" ? -1 : 1));
+
+  const trackBytes = [];
+  const microsPerQuarter = Math.round(60000000 / loop.bpm);
+  pushVarLen(trackBytes, 0);
+  trackBytes.push(0xFF, 0x51, 0x03, (microsPerQuarter >> 16) & 0xFF, (microsPerQuarter >> 8) & 0xFF, microsPerQuarter & 0xFF);
+
+  let lastTick = 0;
+  rawEvents.forEach(ev => {
+    const delta = Math.max(0, ev.tick - lastTick);
+    lastTick = ev.tick;
+    pushVarLen(trackBytes, delta);
+    const statusByte = (ev.type === "on" ? 0x90 : 0x80) | ev.channel;
+    trackBytes.push(statusByte, ev.pitch & 0x7F, ev.velocity & 0x7F);
+  });
+  pushVarLen(trackBytes, 0);
+  trackBytes.push(0xFF, 0x2F, 0x00);
+
+  const header = [0x4D,0x54,0x68,0x64, 0,0,0,6, 0,0, 0,1, (ticksPerQuarter >> 8) & 0xFF, ticksPerQuarter & 0xFF];
+  const trackHeader = [0x4D,0x54,0x72,0x6B,
+    (trackBytes.length >>> 24) & 0xFF, (trackBytes.length >>> 16) & 0xFF,
+    (trackBytes.length >>> 8) & 0xFF, trackBytes.length & 0xFF];
+
+  return new Uint8Array([...header, ...trackHeader, ...trackBytes]);
+}
+
+function exportLoopMIDI(loop){
+  const bytes = buildMidiBytes(loop);
+  downloadBlob(loop.id + ".mid", new Blob([bytes], { type: "audio/midi" }));
+}
+
+/* =========================================================================
+   10. UI描画・イベントハンドラ
+   ========================================================================= */
+const el = id => document.getElementById(id);
+function modeLabel(mode){ return mode === "major" ? "メジャー" : "マイナー"; }
+function densityLabel(name){ return (state.rules.rhythmDensities.find(d => d.name === name) || {}).label || name; }
+function formatDegrees(degrees){ return degrees.join(" → "); }
+
+function buildStepGrid(){
+  const container = el("stepGrid");
+  container.innerHTML = "";
+  for (let bar = 0; bar < state.currentLoop.barsPerLoop; bar++){
+    const row = document.createElement("div");
+    row.className = "step-row";
+    for (let s = 0; s < state.currentLoop.stepsPerBar; s++){
+      const dot = document.createElement("span");
+      dot.className = "step-dot";
+      dot.dataset.step = bar * state.currentLoop.stepsPerBar + s;
+      row.appendChild(dot);
+    }
+    container.appendChild(row);
+  }
+}
+
+function highlightStep(step){
+  document.querySelectorAll(".step-dot.active").forEach(d => d.classList.remove("active"));
+  const dot = document.querySelector('.step-dot[data-step="' + step + '"]');
+  if (dot) dot.classList.add("active");
+}
+
+function clearStepIndicator(){
+  document.querySelectorAll(".step-dot.active").forEach(d => d.classList.remove("active"));
+}
+
+function flashChannel(part){
+  const dot = document.querySelector('.channel-strip[data-part="' + part + '"] .channel-dot');
+  if (!dot) return;
+  dot.classList.add("active");
+  clearTimeout(dot._flashTimer);
+  dot._flashTimer = setTimeout(() => dot.classList.remove("active"), 140);
+}
+
+function syncMixUI(){
+  document.querySelectorAll(".channel-strip").forEach(strip => {
+    const part = strip.dataset.part;
+    const m = state.mix[part];
+    if (!m) return;
+    const volInput = strip.querySelector(".vol-slider");
+    if (volInput){ volInput.value = m.volume; const v = strip.querySelector(".vol-val"); if (v) v.textContent = m.volume + "dB"; }
+    const muteInput = strip.querySelector(".mute-toggle");
+    if (muteInput) muteInput.checked = !!m.mute;
+    const decayInput = strip.querySelector(".decay-slider");
+    if (decayInput && m.decay !== undefined){ decayInput.value = m.decay; const v = strip.querySelector(".decay-val"); if (v) v.textContent = m.decay.toFixed(2) + "s"; }
+    const waveInput = strip.querySelector(".wave-select");
+    if (waveInput && m.wave) waveInput.value = m.wave;
+    const releaseInput = strip.querySelector(".release-slider");
+    if (releaseInput && m.release !== undefined){ releaseInput.value = m.release; const v = strip.querySelector(".release-val"); if (v) v.textContent = m.release.toFixed(2) + "s"; }
+  });
+}
+
+function bindMixEvents(){
+  document.querySelectorAll(".channel-strip").forEach(strip => {
+    const part = strip.dataset.part;
+
+    const volInput = strip.querySelector(".vol-slider");
+    if (volInput) volInput.addEventListener("input", () => {
+      state.mix[part].volume = parseFloat(volInput.value);
+      strip.querySelector(".vol-val").textContent = volInput.value + "dB";
+      applyMixToSynths(); saveMix();
+    });
+
+    const muteInput = strip.querySelector(".mute-toggle");
+    if (muteInput) muteInput.addEventListener("change", () => {
+      state.mix[part].mute = muteInput.checked;
+      saveMix();
+    });
+
+    const decayInput = strip.querySelector(".decay-slider");
+    if (decayInput) decayInput.addEventListener("input", () => {
+      state.mix[part].decay = parseFloat(decayInput.value);
+      strip.querySelector(".decay-val").textContent = parseFloat(decayInput.value).toFixed(2) + "s";
+      applyMixToSynths(); saveMix();
+    });
+
+    const waveInput = strip.querySelector(".wave-select");
+    if (waveInput) waveInput.addEventListener("change", () => {
+      state.mix[part].wave = waveInput.value;
+      applyMixToSynths(); saveMix();
+    });
+
+    const releaseInput = strip.querySelector(".release-slider");
+    if (releaseInput) releaseInput.addEventListener("input", () => {
+      state.mix[part].release = parseFloat(releaseInput.value);
+      strip.querySelector(".release-val").textContent = parseFloat(releaseInput.value).toFixed(2) + "s";
+      applyMixToSynths(); saveMix();
+    });
+  });
+}
+
+function updatePlayButton(){
+  el("playBtn").textContent = isPlaying ? "⏸" : "▶";
+  el("transportHint").textContent = isPlaying ? "再生中（タップで停止）" : "タップして再生";
+}
+
+function renderCurrentLoop(loop){
+  el("rBpm").textContent = loop.bpm + " BPM";
+  el("rKey").textContent = loop.key + " " + modeLabel(loop.mode);
+  el("rProg").textContent = formatDegrees(loop.progressionDegrees);
+  el("rDensity").textContent = densityLabel(loop.densityName);
+  buildStepGrid();
+}
+
+function generateAndSetCurrent(){
+  const loop = generateLoop(state.rules, state.weights);
+  state.currentLoop = loop;
+  renderCurrentLoop(loop);
+}
+
+function renderSavedList(){
+  const list = el("savedList");
+  el("savedCount").textContent = state.savedLoops.length;
+  list.innerHTML = "";
+  if (state.savedLoops.length === 0){
+    const empty = document.createElement("div");
+    empty.className = "empty-state";
+    empty.textContent = "まだ保存されたループはありません。👍で気に入ったループを保存しましょう。";
+    list.appendChild(empty);
+    return;
+  }
+  state.savedLoops.slice().reverse().forEach(loop => {
+    const card = document.createElement("div");
+    card.className = "saved-card";
+    card.innerHTML =
+      '<div class="saved-info">' +
+        '<div class="meta">' + loop.key + modeLabel(loop.mode) + " ・ " + loop.bpm + "BPM" + '</div>' +
+        '<div class="sub">' + formatDegrees(loop.progressionDegrees) + " ・ 密度:" + densityLabel(loop.densityName) + '</div>' +
+      '</div>' +
+      '<div class="card-actions">' +
+        '<button class="icon-btn" data-act="play" aria-label="再生">▶</button>' +
+        '<button class="icon-btn" data-act="json" aria-label="JSON書き出し">JSON</button>' +
+        '<button class="icon-btn" data-act="midi" aria-label="MIDI書き出し">MID</button>' +
+        '<button class="icon-btn" data-act="del" aria-label="削除">🗑</button>' +
+      '</div>';
+    card.querySelector('[data-act="play"]').addEventListener("click", () => playLoop(loop));
+    card.querySelector('[data-act="json"]').addEventListener("click", () => exportLoopJSON(loop));
+    card.querySelector('[data-act="midi"]').addEventListener("click", () => exportLoopMIDI(loop));
+    card.querySelector('[data-act="del"]').addEventListener("click", () => {
+      if (confirm("このループを削除しますか？")) deleteSavedLoop(loop.id);
+    });
+    list.appendChild(card);
+  });
+}
+
+function setStatus(msg){ el("statusLine").textContent = msg; }
+
+function validateRules(r){
+  return r && Array.isArray(r.bpmBands) && r.bpmBands.length &&
+         Array.isArray(r.keys) && r.keys.length &&
+         Array.isArray(r.chordProgressions) && r.chordProgressions.length &&
+         Array.isArray(r.rhythmDensities) && r.rhythmDensities.length &&
+         Number.isInteger(r.barsPerLoop) && Number.isInteger(r.stepsPerBar);
+}
+
+function bindEvents(){
+  el("playBtn").addEventListener("click", () => {
+    if (isPlaying) stopPlayback();
+    else playLoop(state.currentLoop);
+  });
+
+  el("btnGood").addEventListener("click", () => {
+    if (!state.currentLoop) return;
+    updateWeights(state.currentLoop, true);
+    saveLoopToLibrary(state.currentLoop);
+    stopPlayback();
+    generateAndSetCurrent();
+    setStatus("保存しました。次の候補を生成しました。");
+  });
+
+  el("btnBad").addEventListener("click", () => {
+    if (!state.currentLoop) return;
+    updateWeights(state.currentLoop, false);
+    stopPlayback();
+    generateAndSetCurrent();
+    setStatus("次の候補を生成しました。");
+  });
+
+  el("exportCurrentJson").addEventListener("click", () => state.currentLoop && exportLoopJSON(state.currentLoop));
+  el("exportCurrentMidi").addEventListener("click", () => state.currentLoop && exportLoopMIDI(state.currentLoop));
+  el("exportAllJson").addEventListener("click", () => exportAllLoopsJSON());
+
+  el("loadRulesBtn").addEventListener("click", () => el("rulesFileInput").click());
+  el("rulesFileInput").addEventListener("change", (ev) => {
+    const file = ev.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const parsed = JSON.parse(reader.result);
+        if (!validateRules(parsed)) throw new Error("形式が不正です");
+        state.rules = parsed;
+        stopPlayback();
+        generateAndSetCurrent();
+        setStatus("ルールJSONを読み込みました（キー" + parsed.keys.length + "種 / 進行" + parsed.chordProgressions.length + "種）。");
+      } catch (e) {
+        setStatus("読み込み失敗: " + e.message);
+      }
+    };
+    reader.readAsText(file);
+    ev.target.value = "";
+  });
+
+  el("resetRulesBtn").addEventListener("click", () => {
+    state.rules = DEFAULT_RULES;
+    stopPlayback();
+    generateAndSetCurrent();
+    setStatus("既定のルールに戻しました。");
+  });
+
+  el("resetWeightsBtn").addEventListener("click", () => {
+    state.weights = defaultWeights();
+    saveWeights(state.weights);
+    setStatus("好みの学習をリセットしました。");
+  });
+
+  el("resetMixBtn").addEventListener("click", () => {
+    state.mix = JSON.parse(JSON.stringify(DEFAULT_MIX));
+    saveMix();
+    syncMixUI();
+    applyMixToSynths();
+    setStatus("音色を既定に戻しました。");
+  });
+
+  el("clearSavedBtn").addEventListener("click", () => {
+    if (confirm("保存済みのループをすべて削除しますか？")) {
+      state.savedLoops = [];
+      persistSavedLoops();
+      renderSavedList();
+      setStatus("保存ループを全削除しました。");
+    }
+  });
+}
+
+/* =========================================================================
+   11. 初期化
+   ========================================================================= */
+function init(){
+  bindEvents();
+  bindMixEvents();
+  syncMixUI();
+  generateAndSetCurrent();
+  renderSavedList();
+  updatePlayButton();
+}
+document.addEventListener("DOMContentLoaded", init);
+</script>
+</body>
+</html>
