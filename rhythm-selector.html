@@ -318,7 +318,7 @@
       <div class="app-icon" aria-hidden="true">♪</div>
       <div>
         <div class="app-name">Loop Studio</div>
-        <div class="app-sub">ループ生成・選別・曲づくり</div>
+        <div class="app-sub" id="appSub">ループ生成・選別・曲づくり</div>
       </div>
     </div>
     <div class="tb-center">
@@ -454,9 +454,19 @@
         <div class="lyrics-view" id="lyricsView" aria-live="off" hidden></div>
         <div class="vocal-bar" id="vocalBar" hidden>
           <span class="field-label">歌声</span>
-          <button class="btn small" id="vvSing" title="VOICEVOX（無料の歌声合成ソフト）で歌詞を歌わせます">🎤 VOICEVOXで歌わせる</button>
-          <label class="toggle-row"><input type="checkbox" class="switch" id="vvUse"> VOICEVOXの歌声を使う</label>
-          <span class="muted small" id="vvStatus"></span>
+          <select id="vocalMode" aria-label="歌声の種類">
+            <option value="robot">内蔵ロボット声</option>
+            <option value="voicevox">VOICEVOX（パソコンで起動）</option>
+            <option value="file">読み込んだ歌声WAV</option>
+            <option value="instrument">歌わない（楽器で演奏）</option>
+          </select>
+          <button class="btn small" id="vocalTest" title="内蔵ロボット声で「ど・れ・み・ふぁ・そ」と歌います">🔊 声のテスト</button>
+          <button class="btn small" id="vvSing" title="VOICEVOX で歌声を作り直します">🎤 VOICEVOXで合成</button>
+          <button class="btn small" id="vocalImport" title="歌声合成ソフトなどで作った歌声のWAVを重ねます">📂 歌声WAVを読み込む</button>
+          <label class="field-row small" title="読み込んだ歌声が伴奏とずれるときに調整します">ずれ補正 <input type="number" id="vocalOffset" step="10" value="0" style="width:74px"> ms</label>
+          <input type="file" id="vocalFile" accept="audio/*,.wav,.mp3,.m4a,.aif,.aiff" hidden>
+          <span class="muted small" id="vvStatus" style="flex-basis:100%"></span>
+          <span class="muted small" style="flex-basis:100%">VOICEVOX に直接つながらないとき：「書き出し → MusicXML」を VOICEVOX のソング機能（または NEUTRINO・Synthesizer V など）で読み込んで歌わせ、書き出した歌声WAVを「📂 歌声WAVを読み込む」で重ねられます。</span>
         </div>
         <div class="edit-row" id="editRow">
           <div class="field-row"><span class="field-label">BPM</span><input type="number" id="editBpm" min="40" max="220" step="1"></div>
@@ -705,6 +715,7 @@
         <div class="field"><label for="setVvTeacher">歌い方の手本（歌唱指導）</label><select id="setVvTeacher"><option value="">（未接続）</option></select></div>
       </div>
       <span class="muted small" id="vvConnStatus"></span>
+      <span class="muted small">このページのオリジン：<code id="pageOrigin"></code>（VOICEVOX の「許可するオリジン」に追加する値）</span>
       <div class="note">Mac に無料の歌声合成ソフト <b>VOICEVOX</b> をインストールして起動しておくと、歌詞を本物に近い歌声で歌わせられます（処理は自分のパソコンの中で行われ、料金はかかりません）。このページを GitHub Pages などから開いている場合は、VOICEVOX エンジンの設定（http://127.0.0.1:50021/setting）で「許可するオリジン」にこのページのアドレス（例：https://masa-taka-code.github.io）を追加してください。<br>キャラクターごとに利用規約があり、作品を公開・販売するときは「VOICEVOX:キャラクター名」のクレジット表記などが必要です。<b>必ず各キャラクターの規約を確認してください。</b></div>
     </div>
 
@@ -727,7 +738,7 @@
     <h3>音源について</h3>
     <div class="note">サンプル音源（ピアノ・ギター・ベースなど）は FluidR3_GM サウンドフォント（gleitz/midi-js-soundfonts 経由）をネットから読み込みます。一般に MIT ライセンスとして配布されていますが、<b>商用利用の前に配布元のライセンスを必ずご自身で確認してください</b>。「内蔵」と付いたシンセ音とドラムはこのツール内で合成しているため、外部音源を使いません。</div>
 
-    <div class="sheet-foot"><button class="btn primary" id="closeSettings">完了</button></div>
+    <div class="sheet-foot"><span class="muted small" id="appVersion" style="margin-right:auto;align-self:center"></span><button class="btn primary" id="closeSettings">完了</button></div>
   </div>
 </div>
 
@@ -913,6 +924,7 @@ const DEFAULT_RULES = {
 /* =========================================================================
    2. 楽器・ドラムキット定義
    ========================================================================= */
+const APP_VERSION = "2026.09.24-vocal2";
 const SAMPLE_BASE_URL = "https://gleitz.github.io/midi-js-soundfonts/FluidR3_GM/";
 const INSTRUMENTS = {
   "piano":         { label: "ピアノ",                 kind: "sample", gm: "acoustic_grand_piano", program: 0,  oct: [1, 6], release: 1.2 },
@@ -2200,9 +2212,11 @@ function buildEngine(item, mix, bufMaps, only = null){
       });
     },
     playClip(clip, t){
+      const offset = Math.max(0, clip.offset || 0);
+      if (offset >= clip.buffer.duration) return;
       const p = new Tone.Player({ url: clip.buffer, context });
       p.connect(channels.melody.pv);
-      p.start(t, clip.offset || 0);
+      try { p.start(Math.max(t, 0), offset); } catch (e) { p.dispose(); return; }
       p.onstop = () => setTimeout(() => { try { p.dispose(); } catch (e) {} }, 50);
     },
     releaseAll(){ MELODIC_ROLES.forEach(r => { try { voices[r].release(); } catch (e) {} }); },
@@ -3134,12 +3148,17 @@ function composeSongFromLyrics(struct, opts){
    VOICEVOX 連携（無料の歌声合成エンジンをローカルで呼び出す・任意）
    ========================================================================= */
 const VV_FPS = 24000 / 256; // VOICEVOX の歌唱合成は 1フレーム = 256サンプル（24kHz）
-const vv = { key: null, clips: null, use: false, credit: "" };
+const vv = { key: null, clips: null, use: false, credit: "", source: "", offsetMs: 0 };
 const vvBase = () => String(state.settings.voicevoxUrl || DEFAULT_SETTINGS.voicevoxUrl).trim().replace(/\/+$/, "");
 async function vvRequest(path, opts){
   let res;
   try { res = await fetch(vvBase() + path, opts); }
-  catch (e) { throw new Error("VOICEVOX に接続できません。VOICEVOX を起動し、URL と「許可するオリジン」の設定を確認してください。"); }
+  catch (e) {
+    const origin = location.origin && location.origin !== "null" ? location.origin : "（ローカルファイル）";
+    throw new Error("VOICEVOX に接続できません（" + (e && e.message ? e.message : e) + "）。確認してください：① VOICEVOX を起動している ② URL が " + vvBase()
+      + " で合っている ③ VOICEVOX のエンジン設定（" + vvBase() + "/setting）で「許可するオリジン」に " + origin + " を追加した（またはCORSポリシーを all にした）"
+      + " ④ Safari でつながらない場合は Chrome を使うか、「📂 歌声WAVを読み込む」の方法を使う");
+  }
   if (!res.ok){
     let msg = "";
     try { msg = (await res.text()).slice(0, 200); } catch (e) {}
@@ -3158,7 +3177,8 @@ async function connectVoicevox(){
       if (st.type === "singing_teacher") teachers.push(item);
       else if (st.type === "frame_decode" || st.type === "sing") voices.push(item);
     }));
-    if (!voices.length || !teachers.length) throw new Error("歌唱に対応した歌手が見つかりませんでした（VOICEVOX を最新版にしてください）");
+    if (!voices.length) throw new Error("歌唱に対応した歌声が見つかりませんでした（歌唱に対応した VOICEVOX 0.16 以降が必要です）");
+    if (!teachers.length) teachers.push({ id: 6000, label: "波音リツ（歌唱指導・既定）", singer: "波音リツ" });
     const S = state.settings;
     el("setVvStyle").replaceChildren(...voices.map(v => option(String(v.id), v.label, v.id === S.voicevoxStyle)));
     el("setVvTeacher").replaceChildren(...teachers.map(v => option(String(v.id), v.label, v.id === S.voicevoxTeacher)));
@@ -3177,13 +3197,15 @@ function saveVoicevoxSelection(){
   try { const map = JSON.parse(el("setVvStyle").dataset.singers || "{}"); if (map[S.voicevoxStyle]) S.voicevoxSinger = map[S.voicevoxStyle]; } catch (e) {}
   persistSettings();
 }
-const VOWEL_KANA = { a: "あ", i: "い", u: "う", e: "え", o: "お", n: "ん" };
+const VOWEL_KANA = { a: "ア", i: "イ", u: "ウ", e: "エ", o: "オ", n: "ン" };
+const toKatakana = s => String(s).replace(/[\u3041-\u3096]/g, ch => String.fromCharCode(ch.charCodeAt(0) + 0x60));
+// VOICEVOX の歌詞は1音符に1モーラのカタカナ
 function vvLyric(u, prevU){
   const s = toHiragana(String(u || "").normalize("NFKC"));
-  if (s === "ー") return VOWEL_KANA[(moraPhonemes(prevU || "あ").v)] || "あ";
+  if (s === "ー") return VOWEL_KANA[moraPhonemes(prevU || "あ").v] || "ア";
   if (s === "っ") return null;
-  if (/^[ぁ-ゖ]+$/.test(s)) return s;
-  return "ら";
+  if (/^[ぁ-ゖ]+$/.test(s)) return toKatakana(splitUnits(s)[0] || s);
+  return "ラ";
 }
 // 1行ぶんの楽譜（前後に休符を置く）
 function vvScore(item, notes){
@@ -3212,7 +3234,12 @@ function vocalKey(item){
 }
 function attachVocalClips(item){
   if (!item) return;
-  item.vocalClips = item.kind === "song" && vv.use && vv.clips && vv.key === vocalKey(item) ? vv.clips : null;
+  const ok = item.kind === "song" && vv.use && vv.clips && vv.key === vocalKey(item);
+  const shift = (vv.offsetMs || 0) / 1000;
+  item.vocalClips = ok ? vv.clips.map(c => {
+    const t = Math.round((c.time + shift) * 1e6) / 1e6;
+    return t >= 0 ? Object.assign({}, c, { time: t }) : Object.assign({}, c, { time: 0, offset: (c.offset || 0) - t });
+  }) : null;
 }
 async function runVoicevox(){
   const item = displayedItem();
@@ -3240,6 +3267,7 @@ async function runVoicevox(){
     vv.key = vocalKey(item);
     vv.clips = clips;
     vv.use = true;
+    vv.source = "voicevox";
     vv.credit = S.voicevoxSinger || "";
     renderVocalBar(item);
     toast("VOICEVOX の歌声を作成しました。公開・販売するときはクレジット表記を忘れずに");
@@ -3250,17 +3278,79 @@ async function runVoicevox(){
     el("vvSing").disabled = false;
   }
 }
+function vocalModeOf(item){
+  if (vv.use && vv.clips && vv.key === vocalKey(item)) return vv.source || "voicevox";
+  return (item.instruments || {}).melody === "vocal-robot" ? "robot" : "instrument";
+}
 function renderVocalBar(item){
   const bar = el("vocalBar");
   const show = !!(item && item.kind === "song" && item.lyricLines && item.lyricLines.length);
   bar.hidden = !show;
   if (!show) return;
-  const ready = !!(vv.clips && vv.key === vocalKey(item));
-  el("vvUse").disabled = !ready;
-  el("vvUse").checked = ready && vv.use;
-  const robot = (item.instruments || {}).melody === "vocal-robot";
-  el("vvStatus").textContent = ready && vv.use ? "VOICEVOX の歌声で再生中（" + (vv.credit || "VOICEVOX") + "）"
-    : robot ? "内蔵ロボット声で歌っています" : "ミキサーのメロディ楽器で「ボーカル（内蔵ロボット声）」を選ぶと歌います";
+  const mode = vocalModeOf(item);
+  el("vocalMode").value = mode;
+  el("vocalOffset").value = vv.offsetMs || 0;
+  el("vvStatus").textContent = mode === "voicevox" ? "VOICEVOX の歌声で再生します（" + (vv.credit || "VOICEVOX") + "）"
+    : mode === "file" ? "読み込んだ歌声（" + (vv.credit || "WAV") + "）を重ねて再生します"
+    : mode === "robot" ? "内蔵ロボット声が歌詞を歌います。聞こえないときは「🔊 声のテスト」で確認してください"
+    : "歌わずに、メロディ楽器（" + instLabel((item.instruments || {}).melody) + "）で演奏します";
+}
+async function setVocalMode(mode){
+  const item = displayedItem();
+  if (!item || item.kind !== "song") return;
+  const song = state.songDraft && (state.songDraft.id || "song_draft") === item.id ? state.songDraft : findSong(item.id);
+  const melody = (item.instruments || {}).melody;
+  if (mode === "robot" || mode === "instrument"){
+    vv.use = false;
+    if (mode === "robot" && melody !== "vocal-robot"){
+      if (song) song.prevMelodyInstrument = melody;
+      setItemInstrument("melody", "vocal-robot");
+    } else if (mode === "instrument" && melody === "vocal-robot"){
+      setItemInstrument("melody", (song && song.prevMelodyInstrument) || "fm-pluck");
+    } else {
+      renderVocalBar(item);
+      if (rt.playing) playLoop(item);
+    }
+    return;
+  }
+  const ready = vv.clips && vv.key === vocalKey(item) && vv.source === mode;
+  if (ready){ vv.use = true; renderVocalBar(item); playLoop(item); return; }
+  renderVocalBar(item);
+  if (mode === "voicevox") runVoicevox();
+  else el("vocalFile").click();
+}
+async function importVocalFile(file){
+  const item = displayedItem();
+  if (!file || !item || item.kind !== "song"){ return; }
+  if (!hasTone()){ toast("Tone.js が読み込まれていません"); return; }
+  try {
+    el("vvStatus").textContent = "歌声を読み込み中…";
+    const buffer = await Tone.getContext().decodeAudioData(await file.arrayBuffer());
+    vv.key = vocalKey(item);
+    vv.clips = [{ time: 0, offset: 0, buffer }];
+    vv.use = true;
+    vv.source = "file";
+    vv.credit = file.name;
+    renderVocalBar(item);
+    playLoop(item);
+  } catch (e) {
+    el("vvStatus").textContent = "この音声ファイルを読み込めませんでした（WAV・MP3・M4A に対応）：" + (e.message || e);
+  }
+}
+// 曲と関係なく、内蔵ロボット声だけを短く鳴らして動作を確認する
+async function testRobotVoice(){
+  if (!hasTone()){ toast("Tone.js を読み込めていないため再生できません"); return; }
+  await ensureAudio();
+  const nodes = [];
+  const track = n => { nodes.push(n); return n; };
+  const voice = makeVocalVoice(track, false);
+  const vol = track(new Tone.Volume(-4));
+  voice.node.connect(vol);
+  vol.toDestination();
+  const t0 = Tone.now() + 0.15;
+  [["C4", "ど"], ["D4", "れ"], ["E4", "み"], ["F4", "ふぁ"], ["G4", "そ"]].forEach(([n, ly], i) => voice.play(n, 0.34, t0 + i * 0.38, 0.9, ly));
+  toast("🔊 ど・れ・み・ふぁ・そ（内蔵ロボット声）");
+  setTimeout(() => nodes.forEach(n => { try { n.dispose(); } catch (e) {} }), 3200);
 }
 
 /* =========================================================================
@@ -3520,7 +3610,7 @@ function metadataFor(item){
     instruments: Object.fromEntries(MELODIC_ROLES.map(r => [r, instLabel((item.instruments || {})[r])])),
     drum_kit: (DRUM_KITS[item.drumKit] || {}).label || null,
     sections: item.sections ? item.sections.map(s => ({ label: s.label, bars: s.bars })) : undefined,
-    voice_credit: item.vocalClips ? "VOICEVOX:" + (vv.credit || "（キャラクター名）") + "（各キャラクターの利用規約に従ってクレジット表記してください）" : undefined,
+    voice_credit: item.vocalClips && vv.source === "voicevox" ? "VOICEVOX:" + (vv.credit || "（キャラクター名）") + "（各キャラクターの利用規約に従ってクレジット表記してください）" : undefined,
     created_with: "Loop Studio", exported_at: new Date().toISOString(),
     sample_source_note: usesSamples(item) ? "FluidR3_GM サウンドフォントのサンプルを使用。商用利用の前に配布元のライセンスを確認してください。" : "内蔵シンセのみで生成。"
   };
@@ -4972,6 +5062,8 @@ function openSettings(){
   el("setDepth").value = String(S.bitDepth);
   el("setApiKey").value = S.apiKey || "";
   el("setVvUrl").value = S.voicevoxUrl || "";
+  el("pageOrigin").textContent = location.origin && location.origin !== "null" ? location.origin : "（ローカルファイルで開いています）";
+  el("appVersion").textContent = "Loop Studio バージョン " + APP_VERSION;
   if (S.voicevoxStyle != null && !el("setVvStyle").querySelector('option[value="' + S.voicevoxStyle + '"]')) el("setVvStyle").replaceChildren(option(String(S.voicevoxStyle), S.voicevoxSinger || "保存済みの歌声（ID " + S.voicevoxStyle + "）", true));
   if (S.voicevoxTeacher != null && !el("setVvTeacher").querySelector('option[value="' + S.voicevoxTeacher + '"]')) el("setVvTeacher").replaceChildren(option(String(S.voicevoxTeacher), "保存済み（ID " + S.voicevoxTeacher + "）", true));
   el("settingsSheet").hidden = false;
@@ -5204,9 +5296,12 @@ function bindEvents(){
   el("setVvStyle").addEventListener("change", saveVoicevoxSelection);
   el("setVvTeacher").addEventListener("change", saveVoicevoxSelection);
   el("vvSing").addEventListener("click", runVoicevox);
-  el("vvUse").addEventListener("change", () => {
-    vv.use = el("vvUse").checked;
-    renderVocalBar(displayedItem());
+  el("vocalMode").addEventListener("change", () => setVocalMode(el("vocalMode").value));
+  el("vocalTest").addEventListener("click", testRobotVoice);
+  el("vocalImport").addEventListener("click", () => el("vocalFile").click());
+  el("vocalFile").addEventListener("change", ev => { importVocalFile(ev.target.files[0]); ev.target.value = ""; });
+  el("vocalOffset").addEventListener("change", () => {
+    vv.offsetMs = parseInt(el("vocalOffset").value, 10) || 0;
     if (rt.playing) playLoop(displayedItem());
   });
 
@@ -5285,6 +5380,7 @@ function bindEvents(){
    12. 初期化
    ========================================================================= */
 function init(){
+  el("appSub").title = "バージョン " + APP_VERSION;
   if (!hasTone()){
     const b = el("fatalBanner");
     b.hidden = false;
