@@ -343,6 +343,7 @@
           <button class="menu-item" data-export="musicxml"><span>MusicXML（メロディ＋歌詞）</span><span class="muted">歌声合成用</span></button>
           <button class="menu-item" data-export="lyrics"><span>歌詞テキスト</span></button>
           <button class="menu-item" data-export="json"><span>JSON（データ）</span></button>
+          <button class="menu-item" data-export="obsidian"><span>Obsidianノート（作品）</span><span class="muted">Markdown</span></button>
           <div class="menu-sep"></div>
           <button class="menu-item" data-export="package"><span>販売用パッケージ（ZIP）</span><span class="muted">WAV+ステム+MIDI+説明</span></button>
           <div class="menu-sep"></div>
@@ -719,6 +720,32 @@
       <div class="note">Mac に無料の歌声合成ソフト <b>VOICEVOX</b> をインストールして起動しておくと、歌詞を本物に近い歌声で歌わせられます（処理は自分のパソコンの中で行われ、料金はかかりません）。このページを GitHub Pages などから開いている場合は、VOICEVOX エンジンの設定（http://127.0.0.1:50021/setting）で「許可するオリジン」にこのページのアドレス（例：https://masa-taka-code.github.io）を追加してください。<br>キャラクターごとに利用規約があり、作品を公開・販売するときは「VOICEVOX:キャラクター名」のクレジット表記などが必要です。<b>必ず各キャラクターの規約を確認してください。</b></div>
     </div>
 
+    <h3 id="obsSection">Obsidian 連携（自己成長ノート）</h3>
+    <div class="field">
+      <div class="note">毎日の評価数・保存したループ・作ったソング・連続記録・好みの変化を Markdown ノートにして、Obsidian の保管庫に書き込みます。
+        「日誌/YYYY-MM-DD 音楽制作」「成長ダッシュボード」「作品/…」の3種類のノートができ、自分のデイリーノートに <code>![[YYYY-MM-DD 音楽制作]]</code> と書くと、その日の制作ログを埋め込めます（frontmatter 付きなので Dataview でも集計できます）。</div>
+      <span class="field-label" style="margin-top:8px">保管庫フォルダに直接書き込む（Chrome / Edge）</span>
+      <div class="field-row">
+        <button class="btn small" id="obsPick">保管庫フォルダを選ぶ…</button>
+        <button class="btn small" id="obsForget" hidden>接続を解除</button>
+        <label class="toggle-row" title="評価・保存のたびに数秒後に自動で書き込みます"><input type="checkbox" class="switch" id="setObsAuto"> 自動で記録</label>
+      </div>
+      <span class="muted small" id="obsStatus"></span>
+      <div class="form-grid" style="margin-top:8px">
+        <div class="field"><label for="setObsFolder">書き込み先（保管庫の中のフォルダ）</label><input type="text" id="setObsFolder" placeholder="Self-Growth/Loop Studio"></div>
+        <div class="field"><label for="setObsVault">保管庫の名前（URIで開く場合）</label><input type="text" id="setObsVault" placeholder="例：MyVault"></div>
+        <div class="field"><label for="setObsGoal">1日の目標（評価する数）</label><input type="number" id="setObsGoal" min="1" max="500"></div>
+        <div class="field"><label for="setObsMin">作品ノートを作る評価</label>
+          <select id="setObsMin"><option value="0">保存したものすべて</option><option value="3">★3以上</option><option value="4">★4以上</option><option value="5">★5のみ</option></select></div>
+      </div>
+      <div class="field-row" style="margin-top:8px">
+        <button class="btn small primary" id="obsSyncAll" title="日誌・ダッシュボード・すべての作品ノートを書き込みます">今すぐ全部書き込む</button>
+        <button class="btn small" id="obsOpenUri" title="obsidian:// で今日の制作ログを作成・上書きします（Safari でも使えます）">Obsidianで今日のログを開く</button>
+        <button class="btn small" id="obsZip">ZIPでダウンロード</button>
+      </div>
+      <span class="muted small">直接書き込みでは、ノートの自動記録の部分だけを更新し、「ふりかえり」「メモ」など自分で書いた部分は残します（URI で開く方法は今日のログを上書きします）。</span>
+    </div>
+
     <h3>生成ルール</h3>
     <div class="field-row">
       <button class="btn small" id="loadRulesBtn">ルールJSONを読み込む</button>
@@ -924,7 +951,7 @@ const DEFAULT_RULES = {
 /* =========================================================================
    2. 楽器・ドラムキット定義
    ========================================================================= */
-const APP_VERSION = "2026.09.24-vocal2";
+const APP_VERSION = "2026.10.25-obsidian";
 const SAMPLE_BASE_URL = "https://gleitz.github.io/midi-js-soundfonts/FluidR3_GM/";
 const INSTRUMENTS = {
   "piano":         { label: "ピアノ",                 kind: "sample", gm: "acoustic_grand_piano", program: 0,  oct: [1, 6], release: 1.2 },
@@ -1022,7 +1049,8 @@ const KEYS = {
   songs: "rhythmTool_songs_v1",
   settings: "rhythmTool_settings_v1",
   draft: "rhythmTool_songDraft_v1",
-  lyricComp: "rhythmTool_lyricCompose_v1"
+  lyricComp: "rhythmTool_lyricCompose_v1",
+  activity: "rhythmTool_activity_v1"
 };
 const DEFAULT_MIX = {
   parts: {
@@ -1042,7 +1070,8 @@ const DEFAULT_GEN = {
   techniques: { secdom: true, sus4: true, borrowed: true, tension: true, onchord: true }
 };
 const DEFAULT_SETTINGS = { theme: "auto", apiKey: "", sampleRate: 44100, bitDepth: 16, wavMode: "seamless", repeats: 2, tail: 2,
-  voicevoxUrl: "http://127.0.0.1:50021", voicevoxStyle: null, voicevoxTeacher: null, voicevoxSinger: "" };
+  voicevoxUrl: "http://127.0.0.1:50021", voicevoxStyle: null, voicevoxTeacher: null, voicevoxSinger: "",
+  obsVault: "", obsFolder: "Self-Growth/Loop Studio", obsGoal: 10, obsMinRating: 4, obsAutoSync: true, obsLastSync: null };
 
 const clone = o => JSON.parse(JSON.stringify(o));
 function loadJSON(key, fallback){
@@ -1095,6 +1124,7 @@ const state = {
   mix: loadMix(),
   gen: loadGen(),
   settings: Object.assign(clone(DEFAULT_SETTINGS), loadJSON(KEYS.settings, {})),
+  activity: loadJSON(KEYS.activity, []) || [],
   candidate: null,
   challenger: null,
   auditioning: "A",
@@ -1111,6 +1141,7 @@ const persistSongs = () => saveJSON(KEYS.songs, state.songs);
 const persistMix = () => saveJSON(KEYS.mix, state.mix);
 const persistGen = () => saveJSON(KEYS.gen, state.gen);
 const persistSettings = () => saveJSON(KEYS.settings, state.settings);
+const persistActivity = () => saveJSON(KEYS.activity, state.activity);
 
 /* =========================================================================
    4. 音楽理論ユーティリティ
@@ -2541,7 +2572,7 @@ function loopTitle(l){
   return genreLabel(l.genre) + " · " + keyShort(l) + " · " + l.bpm + " BPM";
 }
 function saveLoopToLibrary(loop){
-  if (!findLoop(loop.id)) state.savedLoops.push(loop);
+  if (!findLoop(loop.id)){ loop.savedAt = loop.savedAt || new Date().toISOString(); state.savedLoops.push(loop); }
   persistSaved();
   renderLibrary();
 }
@@ -3707,6 +3738,371 @@ async function exportLoopsZip(loops, name = "loop_library"){
 }
 
 /* =========================================================================
+   10b. Obsidian 連携（自己成長ノート）
+   活動ログ（評価・作曲など）を日ごとに集計し、Obsidian の保管庫へ Markdown で書き込む。
+   直接書き込み（File System Access API：Chrome / Edge）、obsidian:// URI、ZIP の3通り。
+   ========================================================================= */
+const OBS_START = "<!-- loop-studio:auto:start -->";
+const OBS_END = "<!-- loop-studio:auto:end -->";
+const ACTIVITY_LIMIT = 4000;
+const CREATIVE_TYPES = ["rate", "rerate", "ab", "song", "compose", "sales", "autopilot"];
+
+const localDay = (d = new Date()) => {
+  const x = new Date(d);
+  return x.getFullYear() + "-" + String(x.getMonth() + 1).padStart(2, "0") + "-" + String(x.getDate()).padStart(2, "0");
+};
+const shiftDay = (day, n) => { const d = new Date(day + "T12:00:00"); d.setDate(d.getDate() + n); return localDay(d); };
+const weekStart = day => { const d = new Date(day + "T12:00:00"); d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return localDay(d); };
+const obsFileName = s => String(s || "").replace(/[\\/:*?"<>|#^\[\]]/g, "_").replace(/\s+/g, " ").trim().slice(0, 60) || "無題";
+const yamlStr = s => JSON.stringify(String(s ?? ""));
+const avg = xs => xs.length ? Math.round(xs.reduce((a, b) => a + b, 0) / xs.length * 10) / 10 : null;
+
+function logActivity(type, item, extra = {}){
+  const entry = Object.assign({ t: new Date().toISOString(), type }, extra);
+  if (item){
+    entry.id = item.id;
+    if (type !== "skip"){
+      entry.title = item.kind === "song" ? (item.title || "無題のソング") : loopTitle(item);
+      entry.genre = item.genre;
+    }
+  }
+  state.activity.push(entry);
+  if (state.activity.length > ACTIVITY_LIMIT) state.activity.splice(0, state.activity.length - ACTIVITY_LIMIT);
+  persistActivity();
+  if (item && item.id) obsPending.add(item.id);
+  scheduleObsidianSync();
+  if (!el("learnPanel").hidden) renderLearn();
+}
+
+/* ---------- 集計 ---------- */
+const savedDay = l => localDay(l.savedAt || l.createdAt || Date.now());
+function activeDays(){
+  const days = new Set(state.activity.filter(a => CREATIVE_TYPES.includes(a.type)).map(a => localDay(a.t)));
+  state.savedLoops.forEach(l => days.add(savedDay(l)));
+  state.songs.forEach(s => { if (s.createdAt) days.add(localDay(s.createdAt)); });
+  return days;
+}
+function streakInfo(){
+  const days = activeDays();
+  const today = localDay();
+  let cur = 0, d = days.has(today) ? today : shiftDay(today, -1);
+  while (days.has(d)){ cur++; d = shiftDay(d, -1); }
+  let best = 0, run = 0, prev = null;
+  [...days].sort().forEach(x => { run = prev && shiftDay(prev, 1) === x ? run + 1 : 1; best = Math.max(best, run); prev = x; });
+  return { current: cur, best, days: days.size, activeToday: days.has(today) };
+}
+function dayStats(day){
+  const acts = state.activity.filter(a => localDay(a.t) === day);
+  const count = type => acts.filter(a => a.type === type).length;
+  const loops = state.savedLoops.filter(l => savedDay(l) === day);
+  const songs = state.songs.filter(s => s.createdAt && localDay(s.createdAt) === day);
+  const rated = count("rate");
+  const goal = Math.max(1, parseInt(state.settings.obsGoal, 10) || 10);
+  return {
+    day, acts, rated, rerated: count("rerate"), skipped: count("skip"), ab: count("ab"), composed: count("compose"),
+    sales: acts.filter(a => a.type === "sales").reduce((s, a) => s + (a.n || 0), 0),
+    loops, songs, avgRating: avg(loops.filter(l => l.rating).map(l => l.rating)), goal, goalMet: rated >= goal
+  };
+}
+function weekRows(n = 8){
+  const start = weekStart(localDay());
+  return Array.from({ length: n }, (_, i) => {
+    const ws = shiftDay(start, -7 * i), we = shiftDay(ws, 6);
+    const inWeek = day => day >= ws && day <= we;
+    const loops = state.savedLoops.filter(l => inWeek(savedDay(l)));
+    return {
+      ws, rated: state.activity.filter(a => a.type === "rate" && inWeek(localDay(a.t))).length,
+      saved: loops.length, songs: state.songs.filter(s => s.createdAt && inWeek(localDay(s.createdAt))).length,
+      avgRating: avg(loops.filter(l => l.rating).map(l => l.rating)),
+      days: [...activeDays()].filter(inWeek).length
+    };
+  });
+}
+function topCounts(items, keyFn, labelFn, k = 3){
+  const m = new Map();
+  items.forEach(x => { const v = keyFn(x); if (v != null && v !== "legacy") m.set(v, (m.get(v) || 0) + 1); });
+  return [...m.entries()].sort((a, b) => b[1] - a[1]).slice(0, k).map(([v, c]) => labelFn(v) + " ×" + c);
+}
+
+/* ---------- ノートの組み立て ---------- */
+const obsFolder = () => String(state.settings.obsFolder || DEFAULT_SETTINGS.obsFolder).replace(/^\/+|\/+$/g, "");
+const dailyName = day => day + " 音楽制作";
+function workNoteName(item){
+  const title = item.kind === "song" ? (item.title || "無題のソング") : loopTitle(item);
+  return obsFileName(title) + " (" + String(item.id).split("_").pop().slice(-6) + ")";
+}
+const workLink = item => "[[" + workNoteName(item) + "|" + (item.kind === "song" ? (item.title || "無題のソング") : loopTitle(item)) + "]]";
+function exportableWorks(){
+  const min = parseInt(state.settings.obsMinRating, 10) || 0;
+  return state.savedLoops.filter(l => (l.rating || 0) >= min || (l.sales || 0) > 0).concat(state.songs);
+}
+function songItemOf(s){ try { return buildSongItem(s); } catch (e) { return null; } }
+function frontmatter(fields){
+  const lines = ["---"];
+  Object.entries(fields).forEach(([k, v]) => {
+    if (v == null || v === "" || (Array.isArray(v) && !v.length)) return;
+    if (Array.isArray(v)) lines.push(k + ":", ...v.map(x => "  - " + yamlStr(x)));
+    else lines.push(k + ": " + (typeof v === "string" ? yamlStr(v) : v));
+  });
+  lines.push("---");
+  return lines.join("\n");
+}
+const baseTags = extra => ["self-growth", "music", "loop-studio"].concat(extra || []);
+function noteWithAuto(fm, title, auto, userPart){
+  return [fm, "# " + title, "", OBS_START, auto.trim(), OBS_END, "", userPart.trim(), ""].join("\n");
+}
+
+function workNote(work){
+  const isSong = Array.isArray(work.sections) && work.kind !== "loop";
+  const item = isSong ? songItemOf(work) : work;
+  if (!item) return null;
+  const created = work.savedAt || work.createdAt;
+  const lines = [];
+  lines.push("- 種類: " + (isSong ? "ソング" : "ループ") + (item.rating ? "　評価: " + "★".repeat(item.rating) + "☆".repeat(5 - item.rating) : ""));
+  lines.push("- ジャンル: " + genreLabel(item.genre) + (item.mood ? "　雰囲気: " + moodLabel(item.mood) : ""));
+  lines.push("- キー: " + keyLong(item) + "　テンポ: " + item.bpm + " BPM　長さ: " + item.bars + " 小節（約 " + Math.round(loopDuration(item)) + " 秒）");
+  if (item.progressionLabel) lines.push("- コード進行: " + item.progressionLabel + ((item.chordNames || []).length ? "（" + item.chordNames.map(c => c.name).join(" ") + "）" : ""));
+  lines.push("- 楽器: " + MELODIC_ROLES.map(r => instLabel((item.instruments || {})[r])).join(" / ") + (DRUM_KITS[item.drumKit] ? "　ドラム: " + DRUM_KITS[item.drumKit].label : ""));
+  if (item.songTechniques && item.songTechniques.length) lines.push("- 展開の技法: " + item.songTechniques.join("、"));
+  if (work.sales) lines.push("- 販売数: " + work.sales);
+  if (created) lines.push("- 制作日: [[" + dailyName(localDay(created)) + "]]");
+  if (item.meta && item.meta.description) lines.push("", item.meta.description);
+  if (item.sections && item.sections.length) lines.push("", "## 構成", item.sections.map(s => s.label + "(" + s.bars + ")").join(" → "));
+  if (item.lyricLines && item.lyricLines.length){
+    lines.push("", "## 歌詞");
+    let sec = null;
+    item.lyricLines.forEach(l => { if (l.section !== sec){ sec = l.section; lines.push("", "**" + sec + "**"); } lines.push(l.text + "  "); });
+  }
+  const fm = frontmatter({
+    type: isSong ? "loop-studio-song" : "loop-studio-loop", title: isSong ? item.title : loopTitle(item),
+    created: created ? localDay(created) : null, rating: item.rating || null, genre: genreLabel(item.genre),
+    mood: item.mood ? moodLabel(item.mood) : null, bpm: item.bpm, key: keyLong(item), bars: item.bars,
+    progression: item.progressionLabel || null, sales: work.sales || null, loop_studio_id: work.id,
+    tags: baseTags(isSong ? ["song"] : ["loop"]).concat((item.meta && item.meta.tags || []).map(t => String(t).replace(/\s+/g, "-")))
+  });
+  return { path: obsFolder() + "/作品/" + workNoteName(isSong ? Object.assign({}, work, { kind: "song", title: item.title }) : work) + ".md",
+    content: noteWithAuto(fm, isSong ? item.title : loopTitle(item), lines.join("\n"), "## メモ\n- 気に入った点：\n- 直したい点：\n- 使いたい場面：") };
+}
+
+function dailyNote(day = localDay()){
+  const s = dayStats(day), st = streakInfo();
+  const works = s.loops.concat(s.songs);
+  const lines = ["## 今日の数字",
+    "- 評価: " + s.rated + "件（目標 " + s.goal + "件 " + (s.goalMet ? "✅ 達成" : "あと " + (s.goal - s.rated) + "件") + "）",
+    "- スキップ: " + s.skipped + "件 / A/B比較: " + s.ab + "回" + (s.rerated ? " / 評価の見直し: " + s.rerated + "件" : ""),
+    "- 保存したループ: " + s.loops.length + "件" + (s.avgRating ? "（平均 ★" + s.avgRating + "）" : ""),
+    "- 作ったソング: " + s.songs.length + "曲" + (s.composed ? " / 歌詞から作曲: " + s.composed + "回" : ""),
+    s.sales ? "- 販売の記録: +" + s.sales : "",
+    "- 連続記録: " + st.current + "日（最長 " + st.best + "日・活動日 合計 " + st.days + "日）"].filter(Boolean);
+  lines.push("", "## 今日の作品");
+  if (works.length){
+    const min = parseInt(state.settings.obsMinRating, 10) || 0;
+    works.sort((a, b) => (b.rating || 0) - (a.rating || 0)).forEach(w => {
+      const isSong = !!w.sections;
+      const item = isSong ? songItemOf(w) : w;
+      if (!item) return;
+      const linked = isSong || (w.rating || 0) >= min || (w.sales || 0) > 0;
+      const name = isSong ? item.title : loopTitle(w);
+      lines.push("- " + (linked ? workLink(isSong ? Object.assign({}, w, { kind: "song", title: item.title }) : w) : name) +
+        (w.rating ? " ★" + w.rating : "") + " · " + [genreLabel(item.genre), keyShort(item), item.bpm + " BPM", item.progressionLabel].filter(Boolean).join(" · "));
+    });
+  } else lines.push("- （まだありません）");
+  const liked = s.loops.filter(l => (l.rating || 0) >= 4);
+  if (liked.length){
+    lines.push("", "## 今日の好み（★4以上）");
+    [["ジャンル", l => l.genre, genreLabel], ["雰囲気", l => l.mood, moodLabel], ["キー", l => keyShort(l), x => x],
+      ["コード進行", l => l.progressionLabel, x => x], ["コード楽器", l => (l.instruments || {}).chord, instLabel]]
+      .forEach(([label, fn, lab]) => { const t = topCounts(liked, fn, lab); if (t.length) lines.push("- " + label + ": " + t.join("、")); });
+  }
+  const fm = frontmatter({
+    date: day, type: "loop-studio-daily", rated: s.rated, skipped: s.skipped, ab: s.ab, saved_loops: s.loops.length,
+    songs: s.songs.length, composed: s.composed, avg_rating: s.avgRating, goal: s.goal, goal_met: s.goalMet, streak: st.current,
+    tags: baseTags(["daily"])
+  });
+  return { path: obsFolder() + "/日誌/" + dailyName(day) + ".md",
+    content: noteWithAuto(fm, "🎵 音楽制作ログ " + day, lines.join("\n"),
+      "## ふりかえり\n- 今日の発見：\n- うまくいったこと：\n- 次に試したいこと：\n\n" +
+      "> 上の自動記録（start〜end の間）は Loop Studio が更新します。ふりかえりなど、この下に書いた内容は直接書き込みのときに残ります。") };
+}
+
+function dashboardNote(){
+  const st = streakInfo(), today = dayStats(localDay());
+  const allRated = state.activity.filter(a => a.type === "rate").length;
+  const folder = obsFolder();
+  const lines = ["## 現在地",
+    "- 連続記録: **" + st.current + "日**（最長 " + st.best + "日）　活動日 合計: " + st.days + "日",
+    "- 今日の評価: " + today.rated + " / " + today.goal + "件 " + (today.goalMet ? "✅" : "⏳"),
+    "- 保存ループ: " + state.savedLoops.length + "件（評価済み " + state.savedLoops.filter(l => l.rating).length + "件）　ソング: " + state.songs.length + "曲",
+    "- 評価の総数（記録開始から）: " + allRated + "件　販売数合計: " + state.savedLoops.reduce((a, l) => a + (l.sales || 0), 0),
+    "", "## 週ごとの推移", "| 週（月曜〜） | 活動日 | 評価 | 保存 | ソング | 平均★ |", "|---|---|---|---|---|---|"];
+  weekRows().forEach(w => lines.push("| " + w.ws + " | " + w.days + " | " + w.rated + " | " + w.saved + " | " + w.songs + " | " + (w.avgRating ?? "—") + " |"));
+  lines.push("", "## 学習した好み（上位）");
+  let anyW = false;
+  ["genre", "mood", "progression", "bpmBand", "inst_chord"].forEach(f => {
+    const map = state.weights[f];
+    if (!map) return;
+    const top = Object.entries(map).sort((a, b) => b[1] - a[1]).slice(0, 3);
+    if (!top.length) return;
+    anyW = true;
+    lines.push("- " + FEATURE_LABELS[f] + ": " + top.map(([v, w]) => featureValueLabel(f, v) + "（" + w.toFixed(2) + "）").join("、"));
+  });
+  if (!anyW) lines.push("- まだ学習データがありません");
+  const best = state.savedLoops.filter(l => (l.rating || 0) >= 4).sort((a, b) => (b.rating - a.rating) || String(b.savedAt || b.createdAt).localeCompare(String(a.savedAt || a.createdAt))).slice(0, 10);
+  if (best.length){
+    lines.push("", "## お気に入りの作品");
+    best.forEach(l => lines.push("- " + workLink(l) + " ★" + l.rating + " · " + genreLabel(l.genre) + " · " + l.bpm + " BPM"));
+  }
+  lines.push("", "## Dataview（プラグインを入れている場合）", "```dataview",
+    "TABLE rated AS \"評価\", saved_loops AS \"保存\", songs AS \"ソング\", avg_rating AS \"平均★\", goal_met AS \"目標\", streak AS \"連続\"",
+    "FROM \"" + folder + "/日誌\"", "SORT date DESC", "LIMIT 14", "```");
+  const fm = frontmatter({ type: "loop-studio-dashboard", updated: new Date().toISOString().slice(0, 16).replace("T", " "),
+    streak: st.current, best_streak: st.best, active_days: st.days, saved_loops: state.savedLoops.length, songs: state.songs.length, tags: baseTags(["dashboard"]) });
+  return { path: folder + "/成長ダッシュボード.md",
+    content: noteWithAuto(fm, "🎵 音楽の成長ダッシュボード", lines.join("\n"),
+      "## 自分のデイリーノートに組み込むには\nデイリーノートのテンプレートに次の1行を入れると、その日の制作ログが埋め込まれます（Templater / コアのテンプレート）。\n\n`![[{{date:YYYY-MM-DD}} 音楽制作]]`\n\n## 目標・メモ\n- ") };
+}
+const embedSnippet = (day = localDay()) => "![[" + dailyName(day) + "]]";
+
+function mergeAutoBlock(old, fresh){
+  if (!old || !old.includes(OBS_END) || !fresh.includes(OBS_END)) return fresh;
+  return fresh.slice(0, fresh.indexOf(OBS_END) + OBS_END.length) + old.slice(old.indexOf(OBS_END) + OBS_END.length);
+}
+
+/* ---------- 保管庫フォルダ（File System Access API） ---------- */
+const canPickDirectory = () => typeof window.showDirectoryPicker === "function";
+let obsHandle = null;
+const obsPending = new Set();
+let obsSyncTimer = null;
+function idbHandleStore(mode, fn){
+  return new Promise((resolve, reject) => {
+    if (typeof indexedDB === "undefined") return reject(new Error("IndexedDB が使えません"));
+    const req = indexedDB.open("loopStudio", 1);
+    req.onupgradeneeded = () => req.result.createObjectStore("handles");
+    req.onerror = () => reject(req.error);
+    req.onsuccess = () => {
+      const tx = req.result.transaction("handles", mode);
+      const r = fn(tx.objectStore("handles"));
+      tx.oncomplete = () => resolve(r && r.result);
+      tx.onerror = () => reject(tx.error);
+    };
+  });
+}
+async function loadObsHandle(){
+  try { obsHandle = (await idbHandleStore("readonly", s => s.get("obsidianVault"))) || null; } catch (e) { obsHandle = null; }
+  renderObsStatus();
+}
+async function pickObsVault(){
+  if (!canPickDirectory()){ toast("このブラウザはフォルダへの直接書き込みに対応していません（Chrome / Edge で開くか、URI・ZIPを使ってください）", 5000); return; }
+  try {
+    obsHandle = await window.showDirectoryPicker({ id: "obsidian-vault", mode: "readwrite" });
+    await idbHandleStore("readwrite", s => s.put(obsHandle, "obsidianVault")).catch(() => {});
+    renderObsStatus();
+    toast("保管庫「" + obsHandle.name + "」に接続しました");
+  } catch (e) { if (e.name !== "AbortError") toast("フォルダを選べませんでした: " + e.message); }
+}
+async function forgetObsVault(){
+  obsHandle = null;
+  await idbHandleStore("readwrite", s => s.delete("obsidianVault")).catch(() => {});
+  renderObsStatus();
+}
+async function obsPermission(ask){
+  if (!obsHandle) return false;
+  const opts = { mode: "readwrite" };
+  if ((await obsHandle.queryPermission(opts)) === "granted") return true;
+  return ask ? (await obsHandle.requestPermission(opts)) === "granted" : false;
+}
+async function obsWrite(note){
+  const parts = note.path.split("/").filter(Boolean);
+  let dir = obsHandle;
+  for (const p of parts.slice(0, -1)) dir = await dir.getDirectoryHandle(p, { create: true });
+  const fh = await dir.getFileHandle(parts[parts.length - 1], { create: true });
+  const old = await (await fh.getFile()).text();
+  const text = mergeAutoBlock(old, note.content);
+  if (text === old) return false;
+  const w = await fh.createWritable();
+  await w.write(text);
+  await w.close();
+  return true;
+}
+// full: すべての作品ノートも書き出す（false なら今日の日誌・ダッシュボード・変更のあった作品だけ）
+async function syncObsidian({ full = false, quiet = false } = {}){
+  if (!(await obsPermission(!quiet))){ if (!quiet) toast("保管庫フォルダへの書き込みが許可されていません"); return false; }
+  const ids = new Set(obsPending);
+  obsPending.clear();
+  const works = exportableWorks().filter(w => full || ids.has(w.id));
+  const notes = [dailyNote(), dashboardNote()].concat(works.map(workNote).filter(Boolean));
+  let changed = 0;
+  try {
+    for (const n of notes) if (await obsWrite(n)) changed++;
+  } catch (e) {
+    ids.forEach(id => obsPending.add(id));
+    if (!quiet) toast("Obsidian への書き込みに失敗しました: " + (e.message || e), 5000);
+    return false;
+  }
+  state.settings.obsLastSync = new Date().toISOString();
+  persistSettings();
+  renderObsStatus();
+  if (!quiet) toast("Obsidian に書き込みました（" + notes.length + "ノート中 " + changed + "件を更新）");
+  return true;
+}
+function scheduleObsidianSync(){
+  if (!state.settings.obsAutoSync || !obsHandle) return;
+  clearTimeout(obsSyncTimer);
+  obsSyncTimer = setTimeout(() => syncObsidian({ quiet: true }).catch(() => {}), 4000);
+}
+
+/* ---------- URI・ZIP・クリップボード ---------- */
+function openObsidianUri(note){
+  const vault = (state.settings.obsVault || "").trim();
+  const params = [vault ? "vault=" + encodeURIComponent(vault) : "", "file=" + encodeURIComponent(note.path.replace(/\.md$/, "")),
+    "content=" + encodeURIComponent(note.content), "overwrite=true"].filter(Boolean).join("&");
+  const a = document.createElement("a");
+  a.href = "obsidian://new?" + params;
+  document.body.appendChild(a); a.click(); a.remove();
+}
+async function exportObsidianZip(){
+  if (!needZip()) return;
+  const zip = new JSZip();
+  [dailyNote(), dashboardNote()].concat(exportableWorks().map(workNote).filter(Boolean)).forEach(n => zip.file(n.path, n.content));
+  downloadBlob("loop_studio_obsidian_" + localDay() + ".zip", await zip.generateAsync({ type: "blob" }));
+  toast("ZIPを書き出しました。解凍して保管庫のフォルダに入れてください", 4000);
+}
+async function copyText(text, label){
+  try { await navigator.clipboard.writeText(text); toast(label + "をコピーしました"); }
+  catch (e) { prompt("コピーしてください", text); }
+}
+// 一番手軽な方法で記録（直接書き込み → URI → ZIP の順）
+async function recordToObsidian(){
+  if (obsHandle) { await syncObsidian(); return; }
+  if ((state.settings.obsVault || "").trim()){ openObsidianUri(dailyNote()); toast("Obsidian で今日の制作ログを開きます"); return; }
+  toast("設定の「Obsidian 連携」で保管庫を設定してください", 3500);
+  openSettings();
+  const sec = el("obsSection");
+  if (sec) sec.scrollIntoView({ block: "start" });
+}
+async function exportItemToObsidian(item){
+  const work = item.kind === "song" ? (findSong(item.id) || state.songDraft) : item;
+  const note = work && workNote(work);
+  if (!note){ toast("書き出す対象がありません"); return; }
+  if (obsHandle && await obsPermission(true)){
+    try { await obsWrite(note); toast("Obsidian に作品ノートを書き込みました"); } catch (e) { toast("書き込みに失敗しました: " + e.message); }
+    return;
+  }
+  if ((state.settings.obsVault || "").trim()){ openObsidianUri(note); return; }
+  downloadBlob(note.path.split("/").pop(), new Blob([note.content], { type: "text/markdown;charset=utf-8" }));
+}
+function renderObsStatus(){
+  const s = el("obsStatus");
+  if (s){
+    s.textContent = obsHandle ? "接続中のフォルダ：" + obsHandle.name + (state.settings.obsLastSync ? "（最終書き込み " + new Date(state.settings.obsLastSync).toLocaleString() + "）" : "")
+      : canPickDirectory() ? "フォルダ未接続" : "このブラウザは直接書き込みに未対応です（Safari など）。URI か ZIP を使ってください";
+    el("obsForget").hidden = !obsHandle;
+    el("obsPick").disabled = !canPickDirectory();
+  }
+  if (!el("learnPanel").hidden) renderLearn();
+}
+
+/* =========================================================================
    11. UI
    ========================================================================= */
 const el = id => document.getElementById(id);
@@ -4197,6 +4593,15 @@ function renderLearn(){
     h("div", { class: "stat" }, h("b", {}, String(state.savedLoops.length)), h("span", {}, "保存ループ")),
     h("div", { class: "stat" }, h("b", {}, String(rated)), h("span", {}, "評価済み")),
     h("div", { class: "stat" }, h("b", {}, String(sales)), h("span", {}, "販売数合計"))));
+  const today = dayStats(localDay()), st = streakInfo();
+  root.append(h("div", { class: "learn-feature" }, h("h4", {}, "今日の成長（Obsidian に記録できます）"),
+    h("div", { class: "learn-row" }, h("span", { class: "name" }, "評価 " + today.rated + " / " + today.goal),
+      h("div", { class: "bar" }, h("div", { style: "width:" + Math.round(clamp(today.rated / today.goal, 0.02, 1) * 100) + "%" })),
+      h("span", { class: "num" }, today.goalMet ? "✅" : "")),
+    h("div", { class: "muted small", style: "margin:6px 0" }, "連続 " + st.current + "日（最長 " + st.best + "日）・今日の保存 " + today.loops.length + "件・ソング " + today.songs.length + "曲"),
+    h("div", { class: "field-row" },
+      h("button", { class: "btn small primary", onclick: () => recordToObsidian() }, "📓 Obsidianに記録"),
+      h("button", { class: "btn small", title: "自分のデイリーノートに貼ると、今日の制作ログが埋め込まれます", onclick: () => copyText(embedSnippet(), "埋め込み用リンク") }, "埋め込みリンクをコピー"))));
   root.append(h("div", { class: "muted small" }, "評価・スキップ・A/B比較・販売数の記録から、次に生成する候補の出やすさ（重み）を学習します。1.0 が基準です。"));
   let any = false;
   Object.keys(FEATURE_LABELS).forEach(feature => {
@@ -4332,6 +4737,7 @@ function recordSales(l){
   if (diff > 0) updateWeights(l, Math.min(2, 1 + 0.12 * diff));
   l.sales = n;
   persistSaved();
+  if (diff > 0) logActivity("sales", l, { n: diff });
   renderLibrary();
   toast("販売数を記録しました" + (diff > 0 ? "（学習に反映）" : ""));
 }
@@ -4353,6 +4759,7 @@ function rateCurrent(stars){
     if (!item.rating) updateWeights(item, STAR_FACTORS[stars]);
     item.rating = stars;
     persistSaved();
+    logActivity("rerate", item, { stars });
     renderLibrary();
     renderNow();
     toast("評価を ★" + stars + " に変更しました");
@@ -4361,6 +4768,7 @@ function rateCurrent(stars){
   updateWeights(item, STAR_FACTORS[stars]);
   item.rating = stars;
   saveLoopToLibrary(item);
+  logActivity("rate", item, { stars });
   replaceCurrentCandidate();
   renderNow();
   toast("★" + stars + " で保存しました");
@@ -4369,6 +4777,7 @@ function rateCurrent(stars){
 function skipCurrent(){
   if (state.view.type !== "candidate") return;
   updateWeights(displayedItem(), SKIP_FACTOR);
+  logActivity("skip", displayedItem());
   replaceCurrentCandidate();
   renderNow();
   toast("スキップしました（好みを学習）", 1400);
@@ -4403,6 +4812,7 @@ function abPick(winner){
   const l = winner === "A" ? state.challenger : state.candidate;
   updateWeights(w, 1.15);
   updateWeights(l, 0.88);
+  logActivity("ab", null);
   state.candidate = w;
   state.challenger = generateLoop();
   state.auditioning = "B";
@@ -4662,6 +5072,8 @@ function saveSongDraft({ silent = false } = {}){
   const idx = state.songs.findIndex(s => s.id === d.id);
   if (idx >= 0) state.songs[idx] = copy; else state.songs.push(copy);
   persistSongs();
+  if (idx < 0) logActivity("song", Object.assign({ kind: "song" }, copy));
+  else { obsPending.add(copy.id); scheduleObsidianSync(); }
   touchDraft();
   const item = buildSongItem(copy);
   if (item){ state.view = { type: "song", item }; renderNow(); }
@@ -4803,6 +5215,7 @@ function runLyricCompose(){
   state.songDraft = song;
   const base = songLoop(song, song.baseLoopId);
   const item = buildSongItem(song);
+  logActivity("compose", null, { title: item.title });
   showComposedSong(song, "作曲しました：" + [moodLabel(base.mood), genreLabel(base.genre), keyLong(base), base.bpm + " BPM",
     item.bars + "小節（約" + fmtTime(loopDuration(item)).replace(/\.\d$/, "") + "）"].join(" · "));
 }
@@ -4934,8 +5347,9 @@ async function runAutopilot(){
       chosen.push(x.l);
       if (chosen.length >= K) break;
     }
-    chosen.forEach(l => { if (!findLoop(l.id)) state.savedLoops.push(l); });
+    chosen.forEach(l => { if (!findLoop(l.id)){ l.savedAt = new Date().toISOString(); state.savedLoops.push(l); } });
     persistSaved();
+    logActivity("autopilot", null, { n: chosen.length });
     renderLibrary();
     bar.style.width = "50%";
     if (withAI){
@@ -5062,6 +5476,12 @@ function openSettings(){
   el("setDepth").value = String(S.bitDepth);
   el("setApiKey").value = S.apiKey || "";
   el("setVvUrl").value = S.voicevoxUrl || "";
+  el("setObsFolder").value = S.obsFolder || "";
+  el("setObsVault").value = S.obsVault || "";
+  el("setObsGoal").value = S.obsGoal;
+  el("setObsMin").value = String(S.obsMinRating);
+  el("setObsAuto").checked = !!S.obsAutoSync;
+  renderObsStatus();
   el("pageOrigin").textContent = location.origin && location.origin !== "null" ? location.origin : "（ローカルファイルで開いています）";
   el("appVersion").textContent = "Loop Studio バージョン " + APP_VERSION;
   if (S.voicevoxStyle != null && !el("setVvStyle").querySelector('option[value="' + S.voicevoxStyle + '"]')) el("setVvStyle").replaceChildren(option(String(S.voicevoxStyle), S.voicevoxSinger || "保存済みの歌声（ID " + S.voicevoxStyle + "）", true));
@@ -5079,10 +5499,20 @@ function closeSettings(){
   S.bitDepth = parseInt(el("setDepth").value, 10);
   S.apiKey = el("setApiKey").value.trim();
   S.voicevoxUrl = el("setVvUrl").value.trim() || DEFAULT_SETTINGS.voicevoxUrl;
+  readObsSettings();
   saveVoicevoxSelection();
   persistSettings();
   el("settingsSheet").hidden = true;
   renderAiKeyNote();
+}
+function readObsSettings(){
+  const S = state.settings;
+  S.obsFolder = el("setObsFolder").value.trim().replace(/^\/+|\/+$/g, "") || DEFAULT_SETTINGS.obsFolder;
+  S.obsVault = el("setObsVault").value.trim();
+  S.obsGoal = clamp(parseInt(el("setObsGoal").value, 10) || DEFAULT_SETTINGS.obsGoal, 1, 500);
+  S.obsMinRating = parseInt(el("setObsMin").value, 10) || 0;
+  S.obsAutoSync = el("setObsAuto").checked;
+  persistSettings();
 }
 function toggleExportMenu(force){
   const menu = el("exportMenu");
@@ -5161,9 +5591,16 @@ function bindEvents(){
   el("exportMenuBtn").addEventListener("click", () => toggleExportMenu());
   document.querySelectorAll("#exportMenu [data-export]").forEach(b => b.addEventListener("click", () => {
     toggleExportMenu(false);
-    if (b.dataset.export === "settings") openSettings(); else exportItem(b.dataset.export);
+    if (b.dataset.export === "settings") openSettings();
+    else if (b.dataset.export === "obsidian") exportItemToObsidian(displayedItem());
+    else exportItem(b.dataset.export);
   }));
   el("settingsBtn").addEventListener("click", openSettings);
+  el("obsPick").addEventListener("click", pickObsVault);
+  el("obsForget").addEventListener("click", forgetObsVault);
+  el("obsSyncAll").addEventListener("click", () => { readObsSettings(); if (obsHandle) syncObsidian({ full: true }); else toast("先に「保管庫フォルダを選ぶ」で接続してください（Safari では URI か ZIP を使います）", 4000); });
+  el("obsOpenUri").addEventListener("click", () => { readObsSettings(); openObsidianUri(dailyNote()); });
+  el("obsZip").addEventListener("click", () => { readObsSettings(); exportObsidianZip(); });
   el("closeSettings").addEventListener("click", closeSettings);
   el("settingsSheet").addEventListener("click", e => { if (e.target === el("settingsSheet")) closeSettings(); });
   document.querySelectorAll("#themeSeg button").forEach(b => b.addEventListener("click", () => { state.settings.theme = b.dataset.themeVal; persistSettings(); applyTheme(); }));
@@ -5405,6 +5842,7 @@ function init(){
   renderAiKeyNote();
   updateTransportUI();
   preloadCandidates();
+  loadObsHandle();
 }
 document.addEventListener("DOMContentLoaded", init);
 </script>
