@@ -66,3 +66,12 @@
 - [筋トレログアプリ 概要設計書](https://claude.ai/artifact/XBGpDVXYmPcRmtQzSDYiAv)：機能、画面、データモデル。
 - [筋肥大理論とアルゴリズム設計](https://claude.ai/artifact/VWJQP3karjk9thZSAzXhrv)：週10〜20セット、RIR 0〜2、RIR補正のダブルプログレッション、停滞時のみデロード、動画フォーム解析の構成。
 - `src/logic.ts` の定数（`WEEKLY_MIN` / `WEEKLY_MAX` / `SESSION_CAP` など）や判定条件を変えるときは、先に設計書を更新し、根拠（論文）を示す。
+
+## 論文調査のやり方
+- 根拠は論文の本文（無理なら抄録）で確かめる。検索結果の要約だけで数値を書かない。読めた範囲（本文／抄録／プレプリント）を必ず記録する。
+- この環境で開ける論文サイト：PubMed・PMC・www.ncbi.nlm.nih.gov・arXiv・SportRxiv・PeerJ・Frontiers。NCBI の通常のページは curl だとブラウザ確認の画面が返るので、公式の BioC API を使う：
+  - 抄録：`https://www.ncbi.nlm.nih.gov/research/bionlp/RESTful/pubmed.cgi/BioC_json/<PMID>/unicode`
+  - PMC 全文：`https://www.ncbi.nlm.nih.gov/research/bionlp/RESTful/pmcoa.cgi/BioC_json/<PMCID>/unicode`
+  - 検索：`https://www.ncbi.nlm.nih.gov/research/pubtator3-api/search/?text=<語>`
+- 論文の値とアプリの設計値（暫定のしきい値・重み）を混ぜない。設計値はコードのコメントと設計書に「設計値」「暫定」と書く。
+- 本文での確認結果は設計書「筋肥大理論とアルゴリズム設計」の「論文本文での確認と修正」の節にまとめる。
