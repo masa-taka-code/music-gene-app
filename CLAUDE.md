@@ -58,6 +58,7 @@
 ### `workout-app/`（筋トレログアプリ）
 - Vite + React 19 + TypeScript、グラフは Recharts、テストは Vitest。
 - データはブラウザの localStorage にのみ保存する（キー `workout-app:data`）。サーバーや外部通信は追加しない。localStorage の読み書きは必ず try/catch で囲む。
+  - 例外（ユーザー承認済みの機能）：動画フォーム採点の解析部品（MediaPipe の wasm を cdn.jsdelivr.net から、姿勢推定モデルを storage.googleapis.com から）だけは初回にダウンロードし、Service Worker でキャッシュする。ユーザーの映像・記録は一切送らない。これ以外の外部通信は追加しない。
 - データ形式（`src/types.ts`）を変えたら、`src/storage.ts` の読み込み処理で古いデータを補えるようにする。
 - 目標算出のロジックは `src/logic.ts` に純粋関数として置き、画面のコードには書かない。
 - UI はスマホ優先（幅360px で横スクロールなし、タップ領域44px 以上）、ダークモード対応。
