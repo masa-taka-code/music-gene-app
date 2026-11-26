@@ -14,8 +14,24 @@
 | `implementer`（`.claude/agents/implementer.md`） | Sonnet | 仕様どおりの実装・修正、ビルド・テスト・lint の実行 |
 | `designer`（`.claude/agents/designer.md`） | Opus | 見た目・情報設計・デザインシステムの評価と改善提案（コードは編集しない） |
 | `ergonomics`（`.claude/agents/ergonomics.md`） | Opus | ジムでの使用環境を前提にした操作性・視認性・認知負荷・エラー防止の評価と改善提案（コードは編集しない） |
+| `sports-scientist`（`.claude/agents/sports-scientist.md`） | Opus | 論文を本文で確かめ、理論・目標算出・しきい値の根拠を評価（コードは編集しない） |
+| `cv-engineer`（`.claude/agents/cv-engineer.md`） | Opus | 動画フォーム解析の計測精度・撮影条件・誤差の扱いを評価（コードは編集しない） |
+| `code-reviewer`（`.claude/agents/code-reviewer.md`） | Opus | 不具合・データ破損・安全面・ルール違反を再現条件つきで報告（コードは編集しない） |
+| `qa-tester`（`.claude/agents/qa-tester.md`） | Sonnet | アプリを実際に操作して動作確認し、再現手順とスクリーンショットつきで報告（コードは編集しない） |
 
-- 画面を新しく作る・大きく変えるときは、先に `designer` と `ergonomics` に並行で評価・提案を依頼し、メインが両者の提案をまとめて画面仕様を決めてから `implementer` に任せる。提案が対立したら、ジムでの使いやすさ（`ergonomics`）を優先し、判断の理由をユーザーに伝える。
+### チームの使い方（作業の種類ごと）
+| 作業 | 事前の評価・調査（並行） | 実装 | 実装後の確認（並行） |
+| --- | --- | --- | --- |
+| 理論・目標算出のロジック | `sports-scientist` | `implementer` | `code-reviewer` |
+| 動画フォーム解析 | `cv-engineer`、根拠が要るときは `sports-scientist` | `implementer` | `code-reviewer`、`qa-tester` |
+| 画面を新しく作る・大きく変える | `designer`、`ergonomics` | `implementer` | `qa-tester` |
+| 不具合の修正 | 原因が分からなければ `code-reviewer` または `cv-engineer` | `implementer`（数行ならメイン） | `qa-tester`（画面に関わるとき） |
+| PR・リリースの前 | — | — | `code-reviewer`、`qa-tester` |
+
+- メインは各メンバーの報告をまとめて判断し、最終的な仕様・修正の要否・commit / push を決める。メンバーの報告は鵜呑みにせず、ビルド・テスト・lint はメインでも実行する。
+- 画面の評価で `designer` と `ergonomics` の提案が対立したら、ジムでの使いやすさ（`ergonomics`）を優先し、判断の理由をユーザーに伝える。
+- 根拠の評価で `sports-scientist` と他のメンバーの意見が対立したら、論文で確かめられた内容を優先する。
+- 評価・確認だけのメンバーは同じファイルを触らないので、並行して依頼してよい。
 
 - メインセッションが Opus 以外で動いていると分かったら、最初にユーザーへ伝える（`/model opus` で切り替え可能）。
 - **任せる作業：** 新しい画面・コンポーネント、まとまった関数の追加、テストの追加、複数ファイルにまたがる修正。
