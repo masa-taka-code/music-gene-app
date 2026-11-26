@@ -1,0 +1,29 @@
+.set-rest { display: flex; flex-wrap: wrap; gap: 6px; }
+.set-rest .btn { flex: 1 1 28%; }
+
+.set-target-row { display: flex; align-items: center; gap: 8px; }
+.set-target-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.set-target-val { min-width: 2.5em; text-align: center; font-weight: 700; font-variant-numeric: tabular-nums; }
+
+.set-warn { color: var(--warn); font-weight: 600; }
+.set-error { color: var(--bad); font-weight: 600; }
+.set-file { display: none; }
+.set-about { font-size: 0.875rem; }
+
+.set-sound { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 8px 0; }
+.set-sound-label { flex: 1 1 100%; font-weight: 600; }
+.set-sound .seg { flex: 1; }
+
+.set-days { display: flex; gap: 4px; margin-bottom: 8px; }
+.set-days .btn { flex: 1 1 0; min-width: 44px; padding-left: 0; padding-right: 0; }
+/* 狭い画面では 44px の7個が1行に入らないので、4列で折り返す */
+@media (max-width: 420px) {
+  .set-days { display: grid; grid-template-columns: repeat(4, 1fr); }
+}
+.set-time { display: flex; align-items: center; gap: 8px; margin: 8px 0; }
+.set-time .set-sound-label { flex: 0 0 auto; }
+.set-time input { min-height: 44px; font: inherit; }
+
+/* 無効な −/＋ は枠を残し、文字だけ muted にする */
+.set-target-row .btn { min-width: 44px; min-height: 44px; }
+.set-target-row .btn:disabled { opacity: 1; color: var(--muted); border-color: var(--border); background: transparent; }
